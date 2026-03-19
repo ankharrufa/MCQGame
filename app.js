@@ -1,6 +1,8 @@
 const roomCode = new URLSearchParams(window.location.search).get("room") || "main";
 const tokenKey = `hoc_player_token_${roomCode}`;
+const nameKey = `hoc_player_name_${roomCode}`;
 let playerToken = localStorage.getItem(tokenKey) || "";
+let lastKnownName = localStorage.getItem(nameKey) || "";
 let statePoller = null;
 let pendingBaseChoice = null;
 let pendingConflictChoice = null;
@@ -18,6 +20,7 @@ const joinForm = document.getElementById("joinForm");
 const nameInput = document.getElementById("nameInput");
 const adminCheckbox = document.getElementById("adminCheckbox");
 const messageEl = document.getElementById("message");
+const rejoinBtn = document.getElementById("rejoinBtn");
 
 const phaseTitle = document.getElementById("phaseTitle");
 const statusLine = document.getElementById("statusLine");
@@ -44,10 +47,32 @@ const conflictWaiting = document.getElementById("conflictWaiting");
 const leaderboardBody = document.getElementById("leaderboardBody");
 
 roomCodeLabel.textContent = roomCode;
+if (lastKnownName) {
+  nameInput.value = lastKnownName;
+}
 
 function showMessage(text, kind = "") {
   messageEl.textContent = text;
   messageEl.className = `message ${kind}`.trim();
+}
+
+function showRejoinOption(visible) {
+  rejoinBtn.classList.toggle("hidden", !visible);
+}
+
+function handlePlayerSessionExpired(errorMessage) {
+  localStorage.removeItem(tokenKey);
+  playerToken = "";
+  setVisibilityForJoined(false);
+  if (statePoller) {
+    clearInterval(statePoller);
+    statePoller = null;
+  }
+  if (lastKnownName && !nameInput.value.trim()) {
+    nameInput.value = lastKnownName;
+  }
+  showMessage(errorMessage, "error");
+  showRejoinOption(true);
 }
 
 function clearAllSelections() {
@@ -233,7 +258,12 @@ async function refreshState() {
     latestAppliedStateSeq = requestSeq;
     setVisibilityForJoined(true);
     renderState(data);
+    showRejoinOption(false);
   } catch (error) {
+    if (error.message === "Player not found for this room. Please rejoin.") {
+      handlePlayerSessionExpired(error.message);
+      return;
+    }
     showMessage(error.message, "error");
   }
 }
@@ -242,8 +272,11 @@ async function join(name) {
   const wantsAdmin = Boolean(adminCheckbox?.checked);
   const data = await api("join", { name, isAdmin: wantsAdmin });
   playerToken = data.playerToken;
+  lastKnownName = name;
   localStorage.setItem(tokenKey, playerToken);
+  localStorage.setItem(nameKey, lastKnownName);
   setVisibilityForJoined(true);
+  showRejoinOption(false);
   showMessage(wantsAdmin ? "Joined successfully. Admin request submitted." : "Joined successfully.", "ok");
   await refreshState();
   if (!statePoller) {
@@ -255,6 +288,7 @@ joinForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const name = nameInput.value.trim();
   if (!name) return;
+  showRejoinOption(false);
   try {
     await join(name);
   } catch (error) {
@@ -302,6 +336,21 @@ resetPlayersBtn.addEventListener("click", async () => {
     pendingBaseChoice = null;
     pendingConflictChoice = null;
     await refreshState();
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+});
+
+rejoinBtn.addEventListener("click", async () => {
+  const name = nameInput.value.trim();
+  if (!name) {
+    showMessage("Enter your name, then click Rejoin.", "error");
+    nameInput.focus();
+    return;
+  }
+
+  try {
+    await join(name);
   } catch (error) {
     showMessage(error.message, "error");
   }
