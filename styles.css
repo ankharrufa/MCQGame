@@ -78,6 +78,11 @@ button:disabled {
   cursor: not-allowed;
 }
 
+button.loading {
+  opacity: 0.75;
+  cursor: progress;
+}
+
 .topBar {
   display: flex;
   justify-content: space-between;

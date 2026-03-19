@@ -592,6 +592,8 @@ async function actionJoin(room, payload) {
   const isAdminRequested = Boolean(payload?.isAdmin);
   if (!name) throw new Error("Name is required.");
 
+  await syncQuestionsFromCsv();
+
   const duplicateRes = await supabase
     .from("players")
     .select("id")
@@ -604,6 +606,18 @@ async function actionJoin(room, payload) {
 
   const countRes = await supabase.from("players").select("id", { count: "exact", head: true }).eq("room_id", room.id);
   if (countRes.error) throw countRes.error;
+
+  const questionsRes = await supabase.from("questions").select("incorrect_answers");
+  if (questionsRes.error) throw questionsRes.error;
+
+  const maxOptions = (questionsRes.data || []).reduce(
+    (max, question) => Math.max(max, (question.incorrect_answers?.length || 0) + 1),
+    0,
+  );
+
+  if (maxOptions > 0 && (countRes.count || 0) >= maxOptions) {
+    throw new Error("Sorry! The room is full. You cannot joint at the moment");
+  }
 
   await reconcileRoomAdmin(room.id);
   const adminRes = await supabase

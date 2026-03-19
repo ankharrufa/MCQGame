@@ -7,6 +7,7 @@ let pendingConflictChoice = null;
 let stateRequestSeq = 0;
 let latestAppliedStateSeq = 0;
 let currentRoundId = null;
+let startRoundInFlight = false;
 
 const roomCodeLabel = document.getElementById("roomCodeLabel");
 const playerNameLabel = document.getElementById("playerNameLabel");
@@ -47,6 +48,24 @@ roomCodeLabel.textContent = roomCode;
 function showMessage(text, kind = "") {
   messageEl.textContent = text;
   messageEl.className = `message ${kind}`.trim();
+}
+
+function clearAllSelections() {
+  pendingBaseChoice = null;
+  pendingConflictChoice = null;
+  document.querySelectorAll("input[name='baseChoice']").forEach((input) => {
+    input.checked = false;
+  });
+  document.querySelectorAll("input[name='conflictChoice']").forEach((input) => {
+    input.checked = false;
+  });
+}
+
+function setStartRoundLoading(loading) {
+  startRoundInFlight = loading;
+  startRoundBtn.disabled = loading;
+  startRoundBtn.classList.toggle("loading", loading);
+  startRoundBtn.textContent = loading ? "Starting..." : "Start Next Round";
 }
 
 async function api(action, payload = {}) {
@@ -103,18 +122,12 @@ function renderState(data) {
 
   if (view.roundId && view.roundId !== currentRoundId) {
     currentRoundId = view.roundId;
-    pendingBaseChoice = null;
-    pendingConflictChoice = null;
-    document.querySelectorAll("input[name='baseChoice']").forEach((input) => {
-      input.checked = false;
-    });
-    document.querySelectorAll("input[name='conflictChoice']").forEach((input) => {
-      input.checked = false;
-    });
+    clearAllSelections();
   }
 
   if (!view.roundId) {
     currentRoundId = null;
+    clearAllSelections();
   }
 
   if (data.playerName) {
@@ -130,8 +143,11 @@ function renderState(data) {
   if (view.phase === "lobby" || view.phase === "between_rounds") {
     lobbySection.classList.remove("hidden");
     lobbyInfo.textContent = view.lobbyInfo;
-    startRoundBtn.disabled = !view.canStartRound;
+    startRoundBtn.classList.toggle("hidden", !data.isAdmin);
+    startRoundBtn.disabled = startRoundInFlight || !view.canStartRound;
     adminControls.classList.toggle("hidden", !data.isAdmin);
+  } else {
+    startRoundBtn.classList.add("hidden");
   }
 
   if (view.phase === "active") {
@@ -165,9 +181,7 @@ function renderState(data) {
     if (pendingBaseChoice && view.baseChoice === pendingBaseChoice) {
       pendingBaseChoice = null;
     }
-    const currentSelectedInput = document.querySelector("input[name='baseChoice']:checked");
-    const currentSelectedValue = currentSelectedInput ? currentSelectedInput.value : "";
-    const selected = pendingBaseChoice ?? view.baseChoice ?? currentSelectedValue;
+    const selected = pendingBaseChoice ?? view.baseChoice ?? "";
     document.querySelectorAll("input[name='baseChoice']").forEach((input) => {
       input.checked = input.value === selected;
     });
@@ -249,12 +263,17 @@ joinForm.addEventListener("submit", async (event) => {
 });
 
 startRoundBtn.addEventListener("click", async () => {
+  if (startRoundInFlight) return;
   try {
+    clearAllSelections();
+    setStartRoundLoading(true);
     await api("startRound");
     showMessage("Round started.", "ok");
     await refreshState();
   } catch (error) {
     showMessage(error.message, "error");
+  } finally {
+    setStartRoundLoading(false);
   }
 });
 
