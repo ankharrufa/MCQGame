@@ -64,6 +64,18 @@ async function ensureRoom(roomCode) {
     if (insertRes.error) throw insertRes.error;
     room = insertRes.data;
   }
+
+  if (room.base_duration_seconds !== 60) {
+    const updateRes = await supabase
+      .from("game_rooms")
+      .update({ base_duration_seconds: 60 })
+      .eq("id", room.id)
+      .select("*")
+      .single();
+    if (updateRes.error) throw updateRes.error;
+    room = updateRes.data;
+  }
+
   return room;
 }
 
@@ -591,8 +603,9 @@ async function actionStartRound(room, player) {
   const shuffledPlayers = shuffle(players);
 
   const now = Date.now();
-  const baseDeadline = new Date(now + freshRoom.base_duration_seconds * 1000).toISOString();
-  const earlyBonusCutoff = new Date(now + Math.floor(freshRoom.base_duration_seconds * 0.4) * 1000).toISOString();
+  const baseDurationSeconds = 60;
+  const baseDeadline = new Date(now + baseDurationSeconds * 1000).toISOString();
+  const earlyBonusCutoff = new Date(now + Math.floor(baseDurationSeconds * 0.4) * 1000).toISOString();
 
   const roundInsert = await supabase
     .from("rounds")

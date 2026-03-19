@@ -31,6 +31,7 @@ const assignedOption = document.getElementById("assignedOption");
 
 const conflictSection = document.getElementById("conflictSection");
 const conflictPrompt = document.getElementById("conflictPrompt");
+const conflictChoices = document.getElementById("conflictChoices");
 const conflictWaiting = document.getElementById("conflictWaiting");
 
 const leaderboardBody = document.getElementById("leaderboardBody");
@@ -122,7 +123,9 @@ function renderState(data) {
     if (pendingBaseChoice && view.baseChoice === pendingBaseChoice) {
       pendingBaseChoice = null;
     }
-    const selected = pendingBaseChoice ?? view.baseChoice ?? "";
+    const currentSelectedInput = document.querySelector("input[name='baseChoice']:checked");
+    const currentSelectedValue = currentSelectedInput ? currentSelectedInput.value : "";
+    const selected = pendingBaseChoice ?? view.baseChoice ?? currentSelectedValue;
     document.querySelectorAll("input[name='baseChoice']").forEach((input) => {
       input.checked = input.value === selected;
     });
@@ -135,6 +138,7 @@ function renderState(data) {
     const challengePlayers = Array.isArray(view.challengePlayers) ? view.challengePlayers : [];
     const challengeLabel = challengePlayers.length ? challengePlayers.join(", ") : "Multiple players";
     if (view.isConflictPlayer) {
+      conflictChoices.classList.remove("hidden");
       conflictPrompt.textContent = `Challenge Phase: ${challengeLabel} claimed they are correct. Choose your action.`;
       conflictWaiting.classList.add("hidden");
       if (pendingConflictChoice && view.conflictChoice === pendingConflictChoice) {
@@ -146,6 +150,7 @@ function renderState(data) {
         input.checked = input.value === selected;
       });
     } else {
+      conflictChoices.classList.add("hidden");
       conflictPrompt.textContent = `Challenge Phase: ${challengeLabel} are resolving the final claim.`;
       conflictWaiting.classList.remove("hidden");
       const lockedScore = Number.isFinite(view.lockedRoundScore) ? view.lockedRoundScore : 0;
@@ -156,6 +161,7 @@ function renderState(data) {
       });
     }
   } else {
+    conflictChoices.classList.remove("hidden");
     pendingConflictChoice = null;
   }
 }
