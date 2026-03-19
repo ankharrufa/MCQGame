@@ -6,6 +6,7 @@ let pendingBaseChoice = null;
 let pendingConflictChoice = null;
 let stateRequestSeq = 0;
 let latestAppliedStateSeq = 0;
+let currentRoundId = null;
 
 const roomCodeLabel = document.getElementById("roomCodeLabel");
 const playerNameLabel = document.getElementById("playerNameLabel");
@@ -68,11 +69,13 @@ function setVisibilityForJoined(joined) {
   leaderboardCard.classList.toggle("hidden", !joined);
 }
 
-function renderLeaderboard(players) {
+function renderLeaderboard(players, view) {
+  const inactiveIds = new Set(view?.phase === "active" ? (view?.inactivePlayerIds || []) : []);
   leaderboardBody.innerHTML = "";
   players.forEach((player, index) => {
     const row = document.createElement("tr");
-    row.innerHTML = `<td>${index + 1}</td><td>${player.name}</td><td>${player.score}</td>`;
+    const inactiveTag = inactiveIds.has(player.id) ? " (inactive)" : "";
+    row.innerHTML = `<td>${index + 1}</td><td>${player.name}${inactiveTag}</td><td>${player.score}</td>`;
     leaderboardBody.appendChild(row);
   });
 }
@@ -97,10 +100,27 @@ function clearSections() {
 
 function renderState(data) {
   const { view, leaderboard } = data;
+
+  if (view.roundId && view.roundId !== currentRoundId) {
+    currentRoundId = view.roundId;
+    pendingBaseChoice = null;
+    pendingConflictChoice = null;
+    document.querySelectorAll("input[name='baseChoice']").forEach((input) => {
+      input.checked = false;
+    });
+    document.querySelectorAll("input[name='conflictChoice']").forEach((input) => {
+      input.checked = false;
+    });
+  }
+
+  if (!view.roundId) {
+    currentRoundId = null;
+  }
+
   if (data.playerName) {
     playerNameLabel.textContent = data.playerName;
   }
-  renderLeaderboard(leaderboard || []);
+  renderLeaderboard(leaderboard || [], view);
   clearSections();
   renderTimer(view.deadline || null);
 

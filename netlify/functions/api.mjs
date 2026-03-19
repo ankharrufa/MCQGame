@@ -499,6 +499,13 @@ async function buildPlayerView(room, player) {
   const conflictSubmission = context.conflictSubmissions.find((item) => item.player_id === player.id);
 
   if (context.round.status === "active") {
+    const participatingPlayerIds = context.assignments.map((item) => item.player_id);
+    const allRoomPlayersRes = await supabase.from("players").select("id").eq("room_id", room.id);
+    if (allRoomPlayersRes.error) throw allRoomPlayersRes.error;
+    const inactivePlayerIds = (allRoomPlayersRes.data || [])
+      .map((item) => item.id)
+      .filter((playerId) => !participatingPlayerIds.includes(playerId));
+
     if (!assignment) {
       const participantCount = context.assignments.length;
       return {
@@ -508,6 +515,8 @@ async function buildPlayerView(room, player) {
           phaseLabel: `Round ${room.round_number}`,
           statusMessage: `This round has ${participantCount} options, so only the first ${participantCount} joined players are participating.`,
           deadline: context.round.base_deadline,
+          roundId: context.round.id,
+          inactivePlayerIds,
           isParticipant: false,
         },
       };
@@ -520,6 +529,8 @@ async function buildPlayerView(room, player) {
         phaseLabel: `Round ${room.round_number}`,
         statusMessage: "Submit your confidence level before the timer ends.",
         deadline: context.round.base_deadline,
+        roundId: context.round.id,
+        inactivePlayerIds,
         isParticipant: true,
         caseStudy: questionRes.data.case_study,
         question: questionRes.data.question,
