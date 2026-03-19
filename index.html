@@ -13,6 +13,7 @@
         <p>
           Room: <span id="roomCodeLabel"></span> • Player: <strong id="playerNameLabel">-</strong>
         </p>
+        <button id="scoringRulesBtn" class="secondary" type="button">Scoring Rules</button>
       </header>
 
       <section id="joinCard" class="card">
@@ -85,6 +86,68 @@
 
       <p id="message" class="message"></p>
       <button id="rejoinBtn" class="secondary hidden" type="button">Rejoin</button>
+
+      <div id="scoringModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scoringTitle">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h2 id="scoringTitle">Scoring Rules</h2>
+            <button id="closeScoringModalBtn" class="secondary" type="button">Close</button>
+          </div>
+
+          <h3>Base Round</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Selection</th>
+                <th>If Correct</th>
+                <th>If Incorrect</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Confident Correct</td>
+                <td>+3</td>
+                <td>-4</td>
+              </tr>
+              <tr>
+                <td>Maybe Correct</td>
+                <td>+1</td>
+                <td>0</td>
+              </tr>
+              <tr>
+                <td>Confident Incorrect</td>
+                <td>-2</td>
+                <td>+2</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>Challenge Round (only for multiple Confident Correct claims)</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Choice</th>
+                <th>If Correct Option</th>
+                <th>If Incorrect Option</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Stand Ground</td>
+                <td>+5</td>
+                <td>-5</td>
+              </tr>
+              <tr>
+                <td>Back Down</td>
+                <td>0</td>
+                <td>-1</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p class="muted">Early bonus: if you choose Confident Correct early and are correct, you get an additional +1.</p>
+        </div>
+      </div>
     </main>
 
     <script type="module" src="./app.js"></script>

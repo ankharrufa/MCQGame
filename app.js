@@ -21,6 +21,9 @@ const nameInput = document.getElementById("nameInput");
 const adminCheckbox = document.getElementById("adminCheckbox");
 const messageEl = document.getElementById("message");
 const rejoinBtn = document.getElementById("rejoinBtn");
+const scoringRulesBtn = document.getElementById("scoringRulesBtn");
+const scoringModal = document.getElementById("scoringModal");
+const closeScoringModalBtn = document.getElementById("closeScoringModalBtn");
 
 const phaseTitle = document.getElementById("phaseTitle");
 const statusLine = document.getElementById("statusLine");
@@ -54,6 +57,14 @@ if (lastKnownName) {
 function showMessage(text, kind = "") {
   messageEl.textContent = text;
   messageEl.className = `message ${kind}`.trim();
+}
+
+function openScoringModal() {
+  scoringModal.classList.remove("hidden");
+}
+
+function closeScoringModal() {
+  scoringModal.classList.add("hidden");
 }
 
 function showRejoinOption(visible) {
@@ -353,6 +364,26 @@ rejoinBtn.addEventListener("click", async () => {
     await join(name);
   } catch (error) {
     showMessage(error.message, "error");
+  }
+});
+
+scoringRulesBtn.addEventListener("click", () => {
+  openScoringModal();
+});
+
+closeScoringModalBtn.addEventListener("click", () => {
+  closeScoringModal();
+});
+
+scoringModal.addEventListener("click", (event) => {
+  if (event.target === scoringModal) {
+    closeScoringModal();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !scoringModal.classList.contains("hidden")) {
+    closeScoringModal();
   }
 });
 
