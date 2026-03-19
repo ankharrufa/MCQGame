@@ -344,8 +344,8 @@ async function buildPlayerView(room, player) {
         statusMessage: room.status === "between_rounds" ? "Start the next round when ready." : "Waiting for players.",
         lobbyInfo: hasMatchingQuestion
           ? `Players joined: ${playerCount}. A matching question is available.`
-          : `Players joined: ${playerCount}. Add a CSV question with exactly ${playerCount} options (1 correct + ${Math.max(0, playerCount - 1)} incorrect).`,
-        canStartRound: hasMatchingQuestion && playerCount >= 2,
+          : `Players joined: ${playerCount}. If start fails, add a CSV question with exactly ${playerCount} options (1 correct + ${Math.max(0, playerCount - 1)} incorrect).`,
+        canStartRound: playerCount >= 2,
       },
     };
   }
