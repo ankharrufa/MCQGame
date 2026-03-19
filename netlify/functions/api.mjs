@@ -251,18 +251,29 @@ async function finalizeConflict(room, context) {
   const earlyMs = new Date(context.round.early_bonus_cutoff).getTime();
   const events = [];
 
+  const existingBaseRes = await supabase
+    .from("score_events")
+    .select("player_id,reason")
+    .eq("round_id", context.round.id);
+  if (existingBaseRes.error) throw existingBaseRes.error;
+  const playersWithBaseScore = new Set(
+    existingBaseRes.data.filter((item) => item.reason.startsWith("base:")).map((item) => item.player_id),
+  );
+
   for (const assignment of context.assignments) {
     const baseSubmission = baseByPlayer.get(assignment.player_id);
     const confidence = baseSubmission?.confidence ?? "maybe_correct";
 
     if (!conflictSet.has(assignment.player_id)) {
-      events.push({
-        room_id: room.id,
-        round_id: context.round.id,
-        player_id: assignment.player_id,
-        points: calcBaseScore(confidence, assignment.is_correct),
-        reason: `base:${confidence}`,
-      });
+      if (!playersWithBaseScore.has(assignment.player_id)) {
+        events.push({
+          room_id: room.id,
+          round_id: context.round.id,
+          player_id: assignment.player_id,
+          points: calcBaseScore(confidence, assignment.is_correct),
+          reason: `base:${confidence}`,
+        });
+      }
       continue;
     }
 
@@ -302,6 +313,45 @@ async function finalizeConflict(room, context) {
   if (roomUpdate.error) throw roomUpdate.error;
 }
 
+async function awardNonConflictBaseScoresAtConflictStart(room, context) {
+  const baseByPlayer = new Map(context.baseSubmissions.map((submission) => [submission.player_id, submission]));
+  const conflictSet = new Set(
+    context.assignments
+      .filter((assignment) => baseByPlayer.get(assignment.player_id)?.confidence === "confident_correct")
+      .map((assignment) => assignment.player_id),
+  );
+
+  const nonConflictAssignments = context.assignments.filter((assignment) => !conflictSet.has(assignment.player_id));
+  if (!nonConflictAssignments.length) return;
+
+  const nonConflictPlayerIds = nonConflictAssignments.map((assignment) => assignment.player_id);
+  const existingRes = await supabase
+    .from("score_events")
+    .select("player_id,reason")
+    .eq("round_id", context.round.id)
+    .in("player_id", nonConflictPlayerIds);
+  if (existingRes.error) throw existingRes.error;
+
+  const alreadyScored = new Set(
+    existingRes.data.filter((item) => item.reason.startsWith("base:")).map((item) => item.player_id),
+  );
+
+  const events = [];
+  for (const assignment of nonConflictAssignments) {
+    if (alreadyScored.has(assignment.player_id)) continue;
+    const confidence = baseByPlayer.get(assignment.player_id)?.confidence ?? "maybe_correct";
+    events.push({
+      room_id: room.id,
+      round_id: context.round.id,
+      player_id: assignment.player_id,
+      points: calcBaseScore(confidence, assignment.is_correct),
+      reason: `base:${confidence}`,
+    });
+  }
+
+  await applyScoreEvents(events);
+}
+
 async function advanceGameIfNeeded(room) {
   if (!room.current_round_id) return;
 
@@ -319,6 +369,8 @@ async function advanceGameIfNeeded(room) {
     );
 
     if (conflictClaimants.length >= 2) {
+      await awardNonConflictBaseScoresAtConflictStart(room, context);
+
       const conflictDeadline = new Date(now + room.conflict_duration_seconds * 1000).toISOString();
       const updateRound = await supabase
         .from("rounds")
@@ -422,14 +474,30 @@ async function buildPlayerView(room, player) {
       .map((item) => item.player_id);
     const isConflictPlayer = conflictPlayers.includes(player.id);
 
+    const challengeNamesRes = conflictPlayers.length
+      ? await supabase.from("players").select("id,name").in("id", conflictPlayers)
+      : { data: [], error: null };
+    if (challengeNamesRes.error) throw challengeNamesRes.error;
+    const challengePlayers = (challengeNamesRes.data || []).map((item) => item.name);
+
+    const lockedScoreRes = await supabase
+      .from("score_events")
+      .select("points")
+      .eq("round_id", context.round.id)
+      .eq("player_id", player.id);
+    if (lockedScoreRes.error) throw lockedScoreRes.error;
+    const lockedRoundScore = (lockedScoreRes.data || []).reduce((sum, item) => sum + item.points, 0);
+
     return {
       leaderboard,
       view: {
         phase: "conflict",
-        phaseLabel: `Round ${room.round_number} Conflict`,
-        statusMessage: "Multiple players selected Confident Correct.",
+        phaseLabel: `Round ${room.round_number} Challenge Phase`,
+        statusMessage: "Challenge in progress.",
         deadline: context.round.conflict_deadline,
         isConflictPlayer,
+        challengePlayers,
+        lockedRoundScore,
         conflictChoice: conflictSubmission?.action_choice ?? null,
       },
     };

@@ -4,6 +4,8 @@ let playerToken = localStorage.getItem(tokenKey) || "";
 let statePoller = null;
 let pendingBaseChoice = null;
 let pendingConflictChoice = null;
+let stateRequestSeq = 0;
+let latestAppliedStateSeq = 0;
 
 const roomCodeLabel = document.getElementById("roomCodeLabel");
 const playerNameLabel = document.getElementById("playerNameLabel");
@@ -28,6 +30,7 @@ const questionText = document.getElementById("questionText");
 const assignedOption = document.getElementById("assignedOption");
 
 const conflictSection = document.getElementById("conflictSection");
+const conflictPrompt = document.getElementById("conflictPrompt");
 const conflictWaiting = document.getElementById("conflictWaiting");
 
 const leaderboardBody = document.getElementById("leaderboardBody");
@@ -129,7 +132,10 @@ function renderState(data) {
 
   if (view.phase === "conflict") {
     conflictSection.classList.remove("hidden");
+    const challengePlayers = Array.isArray(view.challengePlayers) ? view.challengePlayers : [];
+    const challengeLabel = challengePlayers.length ? challengePlayers.join(", ") : "Multiple players";
     if (view.isConflictPlayer) {
+      conflictPrompt.textContent = `Challenge Phase: ${challengeLabel} claimed they are correct. Choose your action.`;
       conflictWaiting.classList.add("hidden");
       if (pendingConflictChoice && view.conflictChoice === pendingConflictChoice) {
         pendingConflictChoice = null;
@@ -140,7 +146,10 @@ function renderState(data) {
         input.checked = input.value === selected;
       });
     } else {
+      conflictPrompt.textContent = `Challenge Phase: ${challengeLabel} are resolving the final claim.`;
       conflictWaiting.classList.remove("hidden");
+      const lockedScore = Number.isFinite(view.lockedRoundScore) ? view.lockedRoundScore : 0;
+      conflictWaiting.textContent = `Your score for this round is locked at ${lockedScore}. Waiting for challenge results.`;
       document.querySelectorAll("input[name='conflictChoice']").forEach((input) => {
         input.disabled = true;
         input.checked = false;
@@ -153,8 +162,13 @@ function renderState(data) {
 
 async function refreshState() {
   if (!playerToken) return;
+  const requestSeq = ++stateRequestSeq;
   try {
     const data = await api("getState");
+    if (requestSeq < latestAppliedStateSeq) {
+      return;
+    }
+    latestAppliedStateSeq = requestSeq;
     setVisibilityForJoined(true);
     renderState(data);
   } catch (error) {
