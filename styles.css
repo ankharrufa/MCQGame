@@ -68,6 +68,11 @@ button {
   cursor: pointer;
 }
 
+button.secondary {
+  background: #334155;
+  color: #e2e8f0;
+}
+
 button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -109,6 +114,22 @@ button:disabled {
 
 .section {
   margin-top: 12px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  border: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .case-study {

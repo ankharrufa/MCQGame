@@ -31,6 +31,15 @@ Game logic implemented:
 
 > The service role key must stay server-side only. Never expose it in frontend code.
 
+### Existing project migration (required for Game admin feature)
+
+If your project is already running, execute this once in Supabase SQL Editor:
+
+```sql
+alter table public.players add column if not exists is_admin boolean not null default false;
+create unique index if not exists ux_players_one_admin_per_room on public.players(room_id) where is_admin;
+```
+
 ---
 
 ## 2) Local Setup

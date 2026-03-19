@@ -14,6 +14,7 @@ const gameCard = document.getElementById("gameCard");
 const leaderboardCard = document.getElementById("leaderboardCard");
 const joinForm = document.getElementById("joinForm");
 const nameInput = document.getElementById("nameInput");
+const adminCheckbox = document.getElementById("adminCheckbox");
 const messageEl = document.getElementById("message");
 
 const phaseTitle = document.getElementById("phaseTitle");
@@ -23,6 +24,9 @@ const timerEl = document.getElementById("timer");
 const lobbySection = document.getElementById("lobbySection");
 const lobbyInfo = document.getElementById("lobbyInfo");
 const startRoundBtn = document.getElementById("startRoundBtn");
+const adminControls = document.getElementById("adminControls");
+const resetRoundsBtn = document.getElementById("resetRoundsBtn");
+const resetPlayersBtn = document.getElementById("resetPlayersBtn");
 
 const questionSection = document.getElementById("questionSection");
 const caseStudy = document.getElementById("caseStudy");
@@ -106,6 +110,7 @@ function renderState(data) {
     lobbySection.classList.remove("hidden");
     lobbyInfo.textContent = view.lobbyInfo;
     startRoundBtn.disabled = !view.canStartRound;
+    adminControls.classList.toggle("hidden", !data.isAdmin);
   }
 
   if (view.phase === "active") {
@@ -183,11 +188,12 @@ async function refreshState() {
 }
 
 async function join(name) {
-  const data = await api("join", { name });
+  const wantsAdmin = Boolean(adminCheckbox?.checked);
+  const data = await api("join", { name, isAdmin: wantsAdmin });
   playerToken = data.playerToken;
   localStorage.setItem(tokenKey, playerToken);
   setVisibilityForJoined(true);
-  showMessage("Joined successfully.", "ok");
+  showMessage(wantsAdmin ? "Joined successfully. Admin request submitted." : "Joined successfully.", "ok");
   await refreshState();
   if (!statePoller) {
     statePoller = setInterval(refreshState, 2000);
@@ -209,6 +215,36 @@ startRoundBtn.addEventListener("click", async () => {
   try {
     await api("startRound");
     showMessage("Round started.", "ok");
+    await refreshState();
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+});
+
+resetRoundsBtn.addEventListener("click", async () => {
+  const confirmed = window.confirm("Reset rounds? This clears rounds and scores, but keeps all joined players.");
+  if (!confirmed) return;
+
+  try {
+    await api("resetRounds");
+    showMessage("Rounds reset.", "ok");
+    pendingBaseChoice = null;
+    pendingConflictChoice = null;
+    await refreshState();
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+});
+
+resetPlayersBtn.addEventListener("click", async () => {
+  const confirmed = window.confirm("Reset players? This removes all other players and keeps only you as Game admin.");
+  if (!confirmed) return;
+
+  try {
+    await api("resetPlayers");
+    showMessage("Players reset. You remain as Game admin.", "ok");
+    pendingBaseChoice = null;
+    pendingConflictChoice = null;
     await refreshState();
   } catch (error) {
     showMessage(error.message, "error");

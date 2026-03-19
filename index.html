@@ -20,6 +20,10 @@
         <p>Enter your name to join this room and appear on the leaderboard.</p>
         <form id="joinForm">
           <input id="nameInput" placeholder="Your name" maxlength="40" required />
+          <label class="inline-check">
+            <input id="adminCheckbox" type="checkbox" />
+            Game admin
+          </label>
           <button type="submit">Join</button>
         </form>
       </section>
@@ -35,7 +39,13 @@
 
         <div id="lobbySection" class="section hidden">
           <p id="lobbyInfo"></p>
-          <button id="startRoundBtn">Start Next Round</button>
+          <div class="row-actions">
+            <button id="startRoundBtn">Start Next Round</button>
+            <div id="adminControls" class="row-actions hidden">
+              <button id="resetRoundsBtn" class="secondary">Reset Rounds</button>
+              <button id="resetPlayersBtn" class="secondary">Reset Players</button>
+            </div>
+          </div>
         </div>
 
         <div id="questionSection" class="section hidden">

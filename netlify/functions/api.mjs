@@ -92,6 +92,40 @@ async function getPlayerByToken(playerToken, roomId) {
   return data;
 }
 
+async function reconcileRoomAdmin(roomId) {
+  const playersRes = await supabase
+    .from("players")
+    .select("id,is_admin,join_order,created_at")
+    .eq("room_id", roomId)
+    .order("join_order", { ascending: true })
+    .order("created_at", { ascending: true });
+  if (playersRes.error) throw playersRes.error;
+
+  const players = playersRes.data || [];
+  if (!players.length) return;
+
+  const admins = players.filter((player) => player.is_admin === true);
+  if (admins.length === 1) return;
+
+  const primaryAdminId = (admins.length > 0 ? admins : players)[0].id;
+
+  const setPrimary = await supabase.from("players").update({ is_admin: true }).eq("id", primaryAdminId);
+  if (setPrimary.error) throw setPrimary.error;
+
+  const removeOthers = await supabase
+    .from("players")
+    .update({ is_admin: false })
+    .eq("room_id", roomId)
+    .neq("id", primaryAdminId);
+  if (removeOthers.error) throw removeOthers.error;
+}
+
+function requireAdmin(player) {
+  if (!player?.is_admin) {
+    throw new Error("Only the Game admin can perform this action.");
+  }
+}
+
 async function syncQuestionsFromCsv() {
   const csvPath = path.join(process.cwd(), "questions.csv");
   const raw = await fs.readFile(csvPath, "utf8");
@@ -529,6 +563,7 @@ async function buildPlayerView(room, player) {
 
 async function actionJoin(room, payload) {
   const name = (payload?.name || "").trim();
+  const isAdminRequested = Boolean(payload?.isAdmin);
   if (!name) throw new Error("Name is required.");
 
   const duplicateRes = await supabase
@@ -544,6 +579,28 @@ async function actionJoin(room, payload) {
   const countRes = await supabase.from("players").select("id", { count: "exact", head: true }).eq("room_id", room.id);
   if (countRes.error) throw countRes.error;
 
+  await reconcileRoomAdmin(room.id);
+  const adminRes = await supabase
+    .from("players")
+    .select("id")
+    .eq("room_id", room.id)
+    .eq("is_admin", true)
+    .limit(1);
+  if (adminRes.error) throw adminRes.error;
+
+  const hasAdmin = (adminRes.data || []).length > 0;
+  const isFirstPlayer = (countRes.count || 0) === 0;
+
+  let isAdmin = false;
+  if (isAdminRequested) {
+    if (hasAdmin) {
+      throw new Error("A Game admin is already assigned for this room.");
+    }
+    isAdmin = true;
+  } else if (!hasAdmin && isFirstPlayer) {
+    isAdmin = true;
+  }
+
   const token = randomUUID();
   const insertRes = await supabase
     .from("players")
@@ -552,6 +609,7 @@ async function actionJoin(room, payload) {
       name,
       join_order: (countRes.count || 0) + 1,
       player_token: token,
+      is_admin: isAdmin,
     })
     .select("id")
     .single();
@@ -698,6 +756,52 @@ async function actionSubmitConflict(room, player, payload) {
   await advanceGameIfNeeded(room);
 }
 
+async function actionResetRounds(room) {
+  const roundsRes = await supabase.from("rounds").select("id").eq("room_id", room.id);
+  if (roundsRes.error) throw roundsRes.error;
+
+  const roundIds = roundsRes.data.map((item) => item.id);
+
+  const scoreDelete = await supabase.from("score_events").delete().eq("room_id", room.id);
+  if (scoreDelete.error) throw scoreDelete.error;
+
+  if (roundIds.length > 0) {
+    const conflictDelete = await supabase.from("conflict_submissions").delete().in("round_id", roundIds);
+    if (conflictDelete.error) throw conflictDelete.error;
+
+    const baseDelete = await supabase.from("base_submissions").delete().in("round_id", roundIds);
+    if (baseDelete.error) throw baseDelete.error;
+
+    const assignmentDelete = await supabase.from("round_assignments").delete().in("round_id", roundIds);
+    if (assignmentDelete.error) throw assignmentDelete.error;
+
+    const roundDelete = await supabase.from("rounds").delete().eq("room_id", room.id);
+    if (roundDelete.error) throw roundDelete.error;
+  }
+
+  const playerReset = await supabase.from("players").update({ score: 0 }).eq("room_id", room.id);
+  if (playerReset.error) throw playerReset.error;
+
+  const roomReset = await supabase
+    .from("game_rooms")
+    .update({ status: "lobby", current_round_id: null, round_number: 0 })
+    .eq("id", room.id);
+  if (roomReset.error) throw roomReset.error;
+}
+
+async function actionResetPlayers(room, player) {
+  await actionResetRounds(room);
+
+  const deleteOthers = await supabase.from("players").delete().eq("room_id", room.id).neq("id", player.id);
+  if (deleteOthers.error) throw deleteOthers.error;
+
+  const keepAdmin = await supabase
+    .from("players")
+    .update({ score: 0, join_order: 1, is_admin: true })
+    .eq("id", player.id);
+  if (keepAdmin.error) throw keepAdmin.error;
+}
+
 export const handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return json(200, { ok: true });
@@ -725,11 +829,18 @@ export const handler = async (event) => {
       return json(200, { ok: true, ...result });
     }
 
+    await reconcileRoomAdmin(room.id);
     const player = await getPlayerByToken(playerToken, room.id);
     await advanceGameIfNeeded(room);
 
     if (action === "startRound") {
       await actionStartRound(room, player);
+    } else if (action === "resetRounds" || action === "restartGame") {
+      requireAdmin(player);
+      await actionResetRounds(room);
+    } else if (action === "resetPlayers") {
+      requireAdmin(player);
+      await actionResetPlayers(room, player);
     } else if (action === "submitBase") {
       await actionSubmitBase(room, player, payload);
     } else if (action === "submitConflict") {
@@ -742,7 +853,7 @@ export const handler = async (event) => {
     if (freshRoomRes.error) throw freshRoomRes.error;
 
     const output = await buildPlayerView(freshRoomRes.data, player);
-    return json(200, { ok: true, playerName: player.name, ...output });
+    return json(200, { ok: true, playerName: player.name, isAdmin: !!player.is_admin, ...output });
   } catch (error) {
     return json(400, { ok: false, error: error.message || "Unexpected error." });
   }

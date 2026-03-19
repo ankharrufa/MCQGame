@@ -18,6 +18,7 @@ create table if not exists public.players (
   name text not null,
   join_order integer not null,
   score integer not null default 0,
+  is_admin boolean not null default false,
   player_token text not null unique,
   created_at timestamptz not null default now(),
   unique(room_id, name)
@@ -82,7 +83,10 @@ create table if not exists public.score_events (
   created_at timestamptz not null default now()
 );
 
+alter table public.players add column if not exists is_admin boolean not null default false;
+
 create index if not exists idx_players_room on public.players(room_id);
+create unique index if not exists ux_players_one_admin_per_room on public.players(room_id) where is_admin;
 create index if not exists idx_rounds_room on public.rounds(room_id);
 create index if not exists idx_assignments_round on public.round_assignments(round_id);
 create index if not exists idx_base_submissions_round on public.base_submissions(round_id);
