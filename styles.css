@@ -44,7 +44,7 @@ body {
 }
 
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 input[type="text"],
