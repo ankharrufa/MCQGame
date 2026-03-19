@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hidden Option Confidence</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="header">
+        <h1>Hidden Option Confidence</h1>
+        <p id="roomLabel"></p>
+      </header>
+
+      <section id="joinCard" class="card">
+        <h2>Join Game</h2>
+        <p>Enter your name to join this room and appear on the leaderboard.</p>
+        <form id="joinForm">
+          <input id="nameInput" placeholder="Your name" maxlength="40" required />
+          <button type="submit">Join</button>
+        </form>
+      </section>
+
+      <section id="gameCard" class="card hidden">
+        <div class="topBar">
+          <div>
+            <h2 id="phaseTitle">Lobby</h2>
+            <p id="statusLine"></p>
+          </div>
+          <div id="timer" class="timer hidden"></div>
+        </div>
+
+        <div id="lobbySection" class="section hidden">
+          <p id="lobbyInfo"></p>
+          <button id="startRoundBtn">Start Next Round</button>
+        </div>
+
+        <div id="questionSection" class="section hidden">
+          <p id="caseStudy" class="case-study hidden"></p>
+          <h3 id="questionText"></h3>
+          <div class="option-card">
+            <p class="option-label">Your assigned option:</p>
+            <p id="assignedOption"></p>
+          </div>
+
+          <div id="baseChoices" class="choices">
+            <label><input type="radio" name="baseChoice" value="confident_correct" /> Confident Correct</label>
+            <label><input type="radio" name="baseChoice" value="maybe_correct" /> Maybe Correct</label>
+            <label><input type="radio" name="baseChoice" value="confident_incorrect" /> Confident Incorrect</label>
+          </div>
+        </div>
+
+        <div id="conflictSection" class="section hidden">
+          <p>Multiple players claimed they are correct. Choose your conflict action:</p>
+          <div class="choices">
+            <label><input type="radio" name="conflictChoice" value="stand_ground" /> Stand Ground</label>
+            <label><input type="radio" name="conflictChoice" value="back_down" /> Back Down</label>
+          </div>
+          <p id="conflictWaiting" class="muted hidden">You are not in the conflict phase. Waiting for conflict players to finish.</p>
+        </div>
+      </section>
+
+      <section id="leaderboardCard" class="card hidden">
+        <h2>Leaderboard</h2>
+        <table>
+          <thead>
+            <tr><th>Rank</th><th>Name</th><th>Score</th></tr>
+          </thead>
+          <tbody id="leaderboardBody"></tbody>
+        </table>
+      </section>
+
+      <p id="message" class="message"></p>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+  </html>

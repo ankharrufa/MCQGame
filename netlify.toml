@@ -1,0 +1,12 @@
+[build]
+  publish = "."
+  command = "npm run build"
+  functions = "netlify/functions"
+
+[functions]
+  included_files = ["questions.csv"]
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api"
+  status = 200

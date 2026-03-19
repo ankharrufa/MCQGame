@@ -1,0 +1,156 @@
+:root {
+  color-scheme: dark;
+  --bg: #0f172a;
+  --card: #1e293b;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --danger: #f87171;
+  --ok: #34d399;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(180deg, #020617, #0f172a 45%, #1e293b);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  min-height: 100vh;
+}
+
+.app {
+  width: min(940px, 95vw);
+  margin: 0 auto;
+  padding: 24px 0 40px;
+}
+
+.header {
+  margin-bottom: 16px;
+}
+
+.header h1 {
+  margin: 0 0 8px;
+}
+
+.card {
+  background: color-mix(in srgb, var(--card), black 10%);
+  border: 1px solid color-mix(in srgb, var(--card), white 12%);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.hidden {
+  display: none;
+}
+
+input[type="text"],
+input:not([type]) {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #475569;
+  background: #0b1220;
+  color: var(--text);
+}
+
+button {
+  margin-top: 12px;
+  background: var(--accent);
+  border: 0;
+  border-radius: 10px;
+  color: #001018;
+  font-weight: 700;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.timer {
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.section {
+  margin-top: 12px;
+}
+
+.case-study {
+  background: #0b1220;
+  border-left: 4px solid var(--accent);
+  padding: 12px;
+  border-radius: 8px;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+}
+
+.option-card {
+  background: #0b1220;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 12px;
+  margin: 14px 0;
+}
+
+.option-label {
+  margin: 0 0 4px;
+  color: var(--muted);
+}
+
+.choices {
+  display: grid;
+  gap: 8px;
+}
+
+label {
+  display: block;
+  padding: 10px;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  background: #0b1220;
+  cursor: pointer;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  border-bottom: 1px solid #334155;
+  padding: 10px 4px;
+}
+
+.message {
+  min-height: 24px;
+  color: var(--muted);
+}
+
+.message.error {
+  color: var(--danger);
+}
+
+.message.ok {
+  color: var(--ok);
+}
+
+.muted {
+  color: var(--muted);
+}
