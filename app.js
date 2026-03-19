@@ -171,7 +171,9 @@ function renderRoundSummary(summary) {
 
   roundSummarySection.classList.remove("hidden");
   const scoreSign = summary.roundScore > 0 ? "+" : "";
-  roundScoreLine.textContent = `Your score this round: ${scoreSign}${summary.roundScore}`;
+  const breakdown = Array.isArray(summary.scoreBreakdown) ? summary.scoreBreakdown : [];
+  const explanation = buildRoundScoreExplanation(breakdown);
+  roundScoreLine.textContent = `Your score this round: ${scoreSign}${summary.roundScore}${explanation ? ` — ${explanation}` : ""}`;
 
   if (summary.caseStudy) {
     roundCaseStudy.classList.remove("hidden");
@@ -198,6 +200,30 @@ function renderRoundSummary(summary) {
     item.innerHTML = `<span>${option.text}</span>${tagSuffix}`;
     roundOptionsList.appendChild(item);
   }
+}
+
+function buildRoundScoreExplanation(scoreBreakdown) {
+  if (!scoreBreakdown.length) {
+    return "No scoring event this round (likely inactive).";
+  }
+
+  const reasonToText = {
+    "base:confident_correct": "base rule: Confident Correct",
+    "base:maybe_correct": "base rule: Maybe Correct",
+    "base:confident_incorrect": "base rule: Confident Incorrect",
+    "conflict:stand_ground": "challenge rule: Stand Ground",
+    "conflict:back_down": "challenge rule: Back Down",
+    "bonus:early_confident_correct": "early +1 bonus",
+  };
+
+  const pieces = scoreBreakdown.map((event) => {
+    const label = reasonToText[event.reason] || event.reason;
+    const points = Number(event.points || 0);
+    const signed = points > 0 ? `+${points}` : `${points}`;
+    return `${label} (${signed})`;
+  });
+
+  return pieces.join("; ");
 }
 
 function renderState(data) {
