@@ -7,7 +7,7 @@ create table if not exists public.game_rooms (
   current_round_id uuid,
   last_started_by_player_id uuid,
   round_number integer not null default 0,
-  base_duration_seconds integer not null default 45,
+  base_duration_seconds integer not null default 60,
   conflict_duration_seconds integer not null default 25,
   created_at timestamptz not null default now()
 );

@@ -58,7 +58,7 @@ async function ensureRoom(roomCode) {
   if (!room) {
     const insertRes = await supabase
       .from("game_rooms")
-      .insert({ room_code: code, status: "lobby" })
+      .insert({ room_code: code, status: "lobby", base_duration_seconds: 60 })
       .select("*")
       .single();
     if (insertRes.error) throw insertRes.error;

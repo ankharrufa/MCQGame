@@ -2,8 +2,11 @@ const roomCode = new URLSearchParams(window.location.search).get("room") || "mai
 const tokenKey = `hoc_player_token_${roomCode}`;
 let playerToken = localStorage.getItem(tokenKey) || "";
 let statePoller = null;
+let pendingBaseChoice = null;
+let pendingConflictChoice = null;
 
-const roomLabel = document.getElementById("roomLabel");
+const roomCodeLabel = document.getElementById("roomCodeLabel");
+const playerNameLabel = document.getElementById("playerNameLabel");
 const joinCard = document.getElementById("joinCard");
 const gameCard = document.getElementById("gameCard");
 const leaderboardCard = document.getElementById("leaderboardCard");
@@ -29,7 +32,7 @@ const conflictWaiting = document.getElementById("conflictWaiting");
 
 const leaderboardBody = document.getElementById("leaderboardBody");
 
-roomLabel.textContent = `Room: ${roomCode}`;
+roomCodeLabel.textContent = roomCode;
 
 function showMessage(text, kind = "") {
   messageEl.textContent = text;
@@ -68,11 +71,13 @@ function renderLeaderboard(players) {
 function renderTimer(deadlineIso) {
   if (!deadlineIso) {
     timerEl.classList.add("hidden");
+    timerEl.classList.remove("urgent");
     return;
   }
   timerEl.classList.remove("hidden");
   const seconds = Math.max(0, Math.ceil((new Date(deadlineIso).getTime() - Date.now()) / 1000));
   timerEl.textContent = `${seconds}s`;
+  timerEl.classList.toggle("urgent", seconds <= 10);
 }
 
 function clearSections() {
@@ -84,7 +89,7 @@ function clearSections() {
 function renderState(data) {
   const { view, leaderboard } = data;
   if (data.playerName) {
-    roomLabel.textContent = `Room: ${roomCode} • Player: ${data.playerName}`;
+    playerNameLabel.textContent = data.playerName;
   }
   renderLeaderboard(leaderboard || []);
   clearSections();
@@ -111,17 +116,25 @@ function renderState(data) {
     questionText.textContent = view.question;
     assignedOption.textContent = view.assignedOption;
 
-    const selected = view.baseChoice || "";
+    if (pendingBaseChoice && view.baseChoice === pendingBaseChoice) {
+      pendingBaseChoice = null;
+    }
+    const selected = pendingBaseChoice ?? view.baseChoice ?? "";
     document.querySelectorAll("input[name='baseChoice']").forEach((input) => {
       input.checked = input.value === selected;
     });
+  } else {
+    pendingBaseChoice = null;
   }
 
   if (view.phase === "conflict") {
     conflictSection.classList.remove("hidden");
     if (view.isConflictPlayer) {
       conflictWaiting.classList.add("hidden");
-      const selected = view.conflictChoice || "";
+      if (pendingConflictChoice && view.conflictChoice === pendingConflictChoice) {
+        pendingConflictChoice = null;
+      }
+      const selected = pendingConflictChoice ?? view.conflictChoice ?? "";
       document.querySelectorAll("input[name='conflictChoice']").forEach((input) => {
         input.disabled = false;
         input.checked = input.value === selected;
@@ -133,6 +146,8 @@ function renderState(data) {
         input.checked = false;
       });
     }
+  } else {
+    pendingConflictChoice = null;
   }
 }
 
@@ -183,11 +198,13 @@ startRoundBtn.addEventListener("click", async () => {
 document.querySelectorAll("input[name='baseChoice']").forEach((input) => {
   input.addEventListener("change", async (event) => {
     const value = event.target.value;
+    pendingBaseChoice = value;
     try {
       await api("submitBase", { confidence: value });
       showMessage("Choice saved.", "ok");
       await refreshState();
     } catch (error) {
+      pendingBaseChoice = null;
       showMessage(error.message, "error");
     }
   });
@@ -196,11 +213,13 @@ document.querySelectorAll("input[name='baseChoice']").forEach((input) => {
 document.querySelectorAll("input[name='conflictChoice']").forEach((input) => {
   input.addEventListener("change", async (event) => {
     const value = event.target.value;
+    pendingConflictChoice = value;
     try {
       await api("submitConflict", { actionChoice: value });
       showMessage("Conflict action saved.", "ok");
       await refreshState();
     } catch (error) {
+      pendingConflictChoice = null;
       showMessage(error.message, "error");
     }
   });

@@ -87,6 +87,26 @@ button:disabled {
   color: var(--accent);
 }
 
+.timer.urgent {
+  color: var(--danger);
+  animation: timer-pulse 0.9s infinite ease-in-out;
+}
+
+@keyframes timer-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 .section {
   margin-top: 12px;
 }
