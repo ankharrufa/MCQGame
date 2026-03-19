@@ -83,6 +83,9 @@ function clearSections() {
 
 function renderState(data) {
   const { view, leaderboard } = data;
+  if (data.playerName) {
+    roomLabel.textContent = `Room: ${roomCode} • Player: ${data.playerName}`;
+  }
   renderLeaderboard(leaderboard || []);
   clearSections();
   renderTimer(view.deadline || null);

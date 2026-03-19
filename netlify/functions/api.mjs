@@ -661,7 +661,7 @@ export const handler = async (event) => {
     if (freshRoomRes.error) throw freshRoomRes.error;
 
     const output = await buildPlayerView(freshRoomRes.data, player);
-    return json(200, { ok: true, ...output });
+    return json(200, { ok: true, playerName: player.name, ...output });
   } catch (error) {
     return json(400, { ok: false, error: error.message || "Unexpected error." });
   }
