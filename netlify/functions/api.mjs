@@ -224,11 +224,22 @@ async function loadRoundContext(roundId) {
 async function applyScoreEvents(events) {
   if (!events.length) return;
 
-  const scoreInsert = await supabase.from("score_events").insert(events);
+  const roundId = events[0].round_id;
+  const existingRes = await supabase
+    .from("score_events")
+    .select("player_id,reason")
+    .eq("round_id", roundId);
+  if (existingRes.error) throw existingRes.error;
+
+  const existingKeys = new Set((existingRes.data || []).map((item) => `${item.player_id}::${item.reason}`));
+  const filteredEvents = events.filter((event) => !existingKeys.has(`${event.player_id}::${event.reason}`));
+  if (!filteredEvents.length) return;
+
+  const scoreInsert = await supabase.from("score_events").insert(filteredEvents);
   if (scoreInsert.error) throw scoreInsert.error;
 
   const totals = new Map();
-  for (const event of events) {
+  for (const event of filteredEvents) {
     totals.set(event.player_id, (totals.get(event.player_id) || 0) + event.points);
   }
 
@@ -243,7 +254,6 @@ async function applyScoreEvents(events) {
 async function finalizeBaseOnly(room, context) {
   const baseByPlayer = new Map(context.baseSubmissions.map((submission) => [submission.player_id, submission]));
   const events = [];
-  const earlyMs = new Date(context.round.early_bonus_cutoff).getTime();
 
   for (const assignment of context.assignments) {
     const submission = baseByPlayer.get(assignment.player_id);
@@ -256,21 +266,6 @@ async function finalizeBaseOnly(room, context) {
       points: score,
       reason: `base:${confidence}`,
     });
-
-    if (
-      confidence === "confident_correct" &&
-      assignment.is_correct &&
-      submission?.submitted_at &&
-      new Date(submission.submitted_at).getTime() <= earlyMs
-    ) {
-      events.push({
-        room_id: room.id,
-        round_id: context.round.id,
-        player_id: assignment.player_id,
-        points: 1,
-        reason: "bonus:early_confident_correct",
-      });
-    }
   }
 
   await applyScoreEvents(events);
@@ -294,7 +289,6 @@ async function finalizeConflict(room, context) {
     .map((assignment) => assignment.player_id);
 
   const conflictSet = new Set(conflictPlayers);
-  const earlyMs = new Date(context.round.early_bonus_cutoff).getTime();
   const events = [];
 
   const existingBaseRes = await supabase
@@ -331,20 +325,6 @@ async function finalizeConflict(room, context) {
       points: calcConflictScore(conflictAction, assignment.is_correct),
       reason: `conflict:${conflictAction}`,
     });
-
-    if (
-      assignment.is_correct &&
-      baseSubmission?.submitted_at &&
-      new Date(baseSubmission.submitted_at).getTime() <= earlyMs
-    ) {
-      events.push({
-        room_id: room.id,
-        round_id: context.round.id,
-        player_id: assignment.player_id,
-        points: 1,
-        reason: "bonus:early_confident_correct",
-      });
-    }
   }
 
   await applyScoreEvents(events);

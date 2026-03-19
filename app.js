@@ -213,7 +213,6 @@ function buildRoundScoreExplanation(scoreBreakdown) {
     "base:confident_incorrect": "base rule: Confident Incorrect",
     "conflict:stand_ground": "challenge rule: Stand Ground",
     "conflict:back_down": "challenge rule: Back Down",
-    "bonus:early_confident_correct": "early +1 bonus",
   };
 
   const pieces = scoreBreakdown.map((event) => {
