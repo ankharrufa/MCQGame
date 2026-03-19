@@ -48,6 +48,8 @@ const conflictChoices = document.getElementById("conflictChoices");
 const conflictWaiting = document.getElementById("conflictWaiting");
 const roundSummarySection = document.getElementById("roundSummarySection");
 const roundScoreLine = document.getElementById("roundScoreLine");
+const roundCaseStudy = document.getElementById("roundCaseStudy");
+const roundQuestionText = document.getElementById("roundQuestionText");
 const roundOptionsList = document.getElementById("roundOptionsList");
 
 const leaderboardBody = document.getElementById("leaderboardBody");
@@ -160,12 +162,27 @@ function clearSections() {
 function renderRoundSummary(summary) {
   if (!summary) {
     roundSummarySection.classList.add("hidden");
+    roundCaseStudy.classList.add("hidden");
+    roundCaseStudy.textContent = "";
+    roundQuestionText.textContent = "";
     roundOptionsList.innerHTML = "";
     return;
   }
 
   roundSummarySection.classList.remove("hidden");
-  roundScoreLine.textContent = `Your score this round: ${summary.roundScore}`;
+  const scoreSign = summary.roundScore > 0 ? "+" : "";
+  roundScoreLine.textContent = `Your score this round: ${scoreSign}${summary.roundScore}`;
+
+  if (summary.caseStudy) {
+    roundCaseStudy.classList.remove("hidden");
+    roundCaseStudy.textContent = summary.caseStudy;
+  } else {
+    roundCaseStudy.classList.add("hidden");
+    roundCaseStudy.textContent = "";
+  }
+
+  roundQuestionText.textContent = summary.question || "";
+
   roundOptionsList.innerHTML = "";
 
   for (const option of summary.options || []) {

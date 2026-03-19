@@ -488,16 +488,28 @@ async function buildPlayerView(room, player) {
         const latestContext = await loadRoundContext(latestRoundRes.data.id);
         const playerAssignment = latestContext.assignments.find((item) => item.player_id === player.id);
 
+        const latestQuestionRes = await supabase
+          .from("questions")
+          .select("case_study,question")
+          .eq("id", latestContext.round.question_id)
+          .single();
+        if (latestQuestionRes.error) throw latestQuestionRes.error;
+
         const playerScoreRes = await supabase
           .from("score_events")
-          .select("points")
+          .select("points,reason")
           .eq("round_id", latestRoundRes.data.id)
           .eq("player_id", player.id);
         if (playerScoreRes.error) throw playerScoreRes.error;
 
+        const scoreEvents = playerScoreRes.data || [];
+
         roundSummary = {
           roundId: latestRoundRes.data.id,
-          roundScore: (playerScoreRes.data || []).reduce((sum, item) => sum + item.points, 0),
+          caseStudy: latestQuestionRes.data.case_study,
+          question: latestQuestionRes.data.question,
+          roundScore: scoreEvents.reduce((sum, item) => sum + item.points, 0),
+          scoreBreakdown: scoreEvents,
           options: latestContext.assignments.map((assignment) => ({
             text: assignment.option_text,
             isCorrect: assignment.is_correct,
