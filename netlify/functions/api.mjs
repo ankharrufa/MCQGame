@@ -467,6 +467,7 @@ async function buildPlayerView(room, player) {
       if (latestRoundRes.data?.id) {
         const latestContext = await loadRoundContext(latestRoundRes.data.id);
         const playerAssignment = latestContext.assignments.find((item) => item.player_id === player.id);
+        const playerBaseSubmission = latestContext.baseSubmissions.find((item) => item.player_id === player.id);
 
         const latestQuestionRes = await supabase
           .from("questions")
@@ -482,7 +483,14 @@ async function buildPlayerView(room, player) {
           .eq("player_id", player.id);
         if (playerScoreRes.error) throw playerScoreRes.error;
 
-        const scoreEvents = playerScoreRes.data || [];
+        const rawScoreEvents = playerScoreRes.data || [];
+        const dedupedEventsMap = new Map();
+        for (const event of rawScoreEvents) {
+          if (!dedupedEventsMap.has(event.reason)) {
+            dedupedEventsMap.set(event.reason, event);
+          }
+        }
+        const scoreEvents = Array.from(dedupedEventsMap.values());
 
         roundSummary = {
           roundId: latestRoundRes.data.id,
@@ -494,6 +502,8 @@ async function buildPlayerView(room, player) {
             text: assignment.option_text,
             isCorrect: assignment.is_correct,
             isChosen: playerAssignment ? assignment.option_text === playerAssignment.option_text : false,
+            isGivenOption: playerAssignment ? assignment.option_text === playerAssignment.option_text : false,
+            playerSelection: playerBaseSubmission?.confidence ?? null,
           })),
         };
       }

@@ -194,12 +194,22 @@ function renderRoundSummary(summary) {
     if (option.isCorrect) item.classList.add("correct");
 
     const tags = [];
-    if (option.isChosen) tags.push("your choice");
-    if (option.isCorrect) tags.push("correct");
+    if (option.isCorrect) tags.push("actual correct");
+    if (option.isGivenOption) {
+      const selectedLabel = formatSelectionLabel(option.playerSelection);
+      tags.push(`your given option - ${selectedLabel}`);
+    }
     const tagSuffix = tags.length ? `<span class=\"round-option-tags\">(${tags.join(" • ")})</span>` : "";
     item.innerHTML = `<span>${option.text}</span>${tagSuffix}`;
     roundOptionsList.appendChild(item);
   }
+}
+
+function formatSelectionLabel(selection) {
+  if (selection === "confident_correct") return "Confident Correct";
+  if (selection === "maybe_correct") return "Maybe Correct";
+  if (selection === "confident_incorrect") return "Confident Incorrect";
+  return "No Selection";
 }
 
 function buildRoundScoreExplanation(scoreBreakdown) {
@@ -208,11 +218,11 @@ function buildRoundScoreExplanation(scoreBreakdown) {
   }
 
   const reasonToText = {
-    "base:confident_correct": "base rule: Confident Correct",
-    "base:maybe_correct": "base rule: Maybe Correct",
-    "base:confident_incorrect": "base rule: Confident Incorrect",
-    "conflict:stand_ground": "challenge rule: Stand Ground",
-    "conflict:back_down": "challenge rule: Back Down",
+    "base:confident_correct": "Base rule: Confident Correct",
+    "base:maybe_correct": "Base rule: Maybe Correct",
+    "base:confident_incorrect": "Base rule: Confident Incorrect",
+    "conflict:stand_ground": "Challenge rule: Stand Ground",
+    "conflict:back_down": "Challenge rule: Back Down",
   };
 
   const pieces = scoreBreakdown.map((event) => {
