@@ -202,6 +202,42 @@ td {
   color: var(--muted);
 }
 
+.round-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.round-option {
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #334155;
+  background: #0b1220;
+}
+
+.round-option.chosen {
+  border-color: #a78bfa;
+  box-shadow: inset 0 0 0 1px #a78bfa;
+}
+
+.round-option.correct {
+  border-color: #34d399;
+  box-shadow: inset 0 0 0 1px #34d399;
+}
+
+.round-option.chosen.correct {
+  border-color: #22d3ee;
+  box-shadow: inset 0 0 0 1px #22d3ee;
+}
+
+.round-option-tags {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .modal {
   position: fixed;
   inset: 0;

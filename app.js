@@ -46,6 +46,9 @@ const conflictSection = document.getElementById("conflictSection");
 const conflictPrompt = document.getElementById("conflictPrompt");
 const conflictChoices = document.getElementById("conflictChoices");
 const conflictWaiting = document.getElementById("conflictWaiting");
+const roundSummarySection = document.getElementById("roundSummarySection");
+const roundScoreLine = document.getElementById("roundScoreLine");
+const roundOptionsList = document.getElementById("roundOptionsList");
 
 const leaderboardBody = document.getElementById("leaderboardBody");
 
@@ -151,6 +154,33 @@ function clearSections() {
   lobbySection.classList.add("hidden");
   questionSection.classList.add("hidden");
   conflictSection.classList.add("hidden");
+  roundSummarySection.classList.add("hidden");
+}
+
+function renderRoundSummary(summary) {
+  if (!summary) {
+    roundSummarySection.classList.add("hidden");
+    roundOptionsList.innerHTML = "";
+    return;
+  }
+
+  roundSummarySection.classList.remove("hidden");
+  roundScoreLine.textContent = `Your score this round: ${summary.roundScore}`;
+  roundOptionsList.innerHTML = "";
+
+  for (const option of summary.options || []) {
+    const item = document.createElement("li");
+    item.className = "round-option";
+    if (option.isChosen) item.classList.add("chosen");
+    if (option.isCorrect) item.classList.add("correct");
+
+    const tags = [];
+    if (option.isChosen) tags.push("your choice");
+    if (option.isCorrect) tags.push("correct");
+    const tagSuffix = tags.length ? `<span class=\"round-option-tags\">(${tags.join(" • ")})</span>` : "";
+    item.innerHTML = `<span>${option.text}</span>${tagSuffix}`;
+    roundOptionsList.appendChild(item);
+  }
 }
 
 function renderState(data) {
@@ -182,8 +212,10 @@ function renderState(data) {
     startRoundBtn.classList.toggle("hidden", !data.isAdmin);
     startRoundBtn.disabled = startRoundInFlight || !view.canStartRound;
     adminControls.classList.toggle("hidden", !data.isAdmin);
+    renderRoundSummary(view.roundSummary || null);
   } else {
     startRoundBtn.classList.add("hidden");
+    renderRoundSummary(null);
   }
 
   if (view.phase === "active") {

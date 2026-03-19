@@ -472,6 +472,41 @@ async function buildPlayerView(room, player) {
       (question) => (question.incorrect_answers?.length || 0) + 1 === playerCount,
     );
 
+    let roundSummary = null;
+    if (room.status === "between_rounds") {
+      const latestRoundRes = await supabase
+        .from("rounds")
+        .select("id")
+        .eq("room_id", room.id)
+        .eq("status", "completed")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestRoundRes.error) throw latestRoundRes.error;
+
+      if (latestRoundRes.data?.id) {
+        const latestContext = await loadRoundContext(latestRoundRes.data.id);
+        const playerAssignment = latestContext.assignments.find((item) => item.player_id === player.id);
+
+        const playerScoreRes = await supabase
+          .from("score_events")
+          .select("points")
+          .eq("round_id", latestRoundRes.data.id)
+          .eq("player_id", player.id);
+        if (playerScoreRes.error) throw playerScoreRes.error;
+
+        roundSummary = {
+          roundId: latestRoundRes.data.id,
+          roundScore: (playerScoreRes.data || []).reduce((sum, item) => sum + item.points, 0),
+          options: latestContext.assignments.map((assignment) => ({
+            text: assignment.option_text,
+            isCorrect: assignment.is_correct,
+            isChosen: playerAssignment ? assignment.option_text === playerAssignment.option_text : false,
+          })),
+        };
+      }
+    }
+
     return {
       leaderboard,
       view: {
@@ -482,6 +517,7 @@ async function buildPlayerView(room, player) {
           ? `Players joined: ${playerCount}. A matching question is available.`
           : `Players joined: ${playerCount}. If start fails, add a CSV question with exactly ${playerCount} options (1 correct + ${Math.max(0, playerCount - 1)} incorrect).`,
         canStartRound: playerCount >= 2,
+        roundSummary,
       },
     };
   }
