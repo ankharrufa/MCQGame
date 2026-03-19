@@ -32,6 +32,7 @@ const questionSection = document.getElementById("questionSection");
 const caseStudy = document.getElementById("caseStudy");
 const questionText = document.getElementById("questionText");
 const assignedOption = document.getElementById("assignedOption");
+const baseChoices = document.getElementById("baseChoices");
 
 const conflictSection = document.getElementById("conflictSection");
 const conflictPrompt = document.getElementById("conflictPrompt");
@@ -115,6 +116,22 @@ function renderState(data) {
 
   if (view.phase === "active") {
     questionSection.classList.remove("hidden");
+    const isParticipant = view.isParticipant !== false;
+
+    if (!isParticipant) {
+      caseStudy.classList.add("hidden");
+      caseStudy.textContent = "";
+      questionText.textContent = "You are waiting this round because there are more players than available options.";
+      assignedOption.textContent = "Not assigned this round";
+      baseChoices.classList.add("hidden");
+      document.querySelectorAll("input[name='baseChoice']").forEach((input) => {
+        input.checked = false;
+      });
+      pendingBaseChoice = null;
+      return;
+    }
+
+    baseChoices.classList.remove("hidden");
     if (view.caseStudy) {
       caseStudy.classList.remove("hidden");
       caseStudy.textContent = view.caseStudy;

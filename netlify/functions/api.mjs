@@ -499,6 +499,20 @@ async function buildPlayerView(room, player) {
   const conflictSubmission = context.conflictSubmissions.find((item) => item.player_id === player.id);
 
   if (context.round.status === "active") {
+    if (!assignment) {
+      const participantCount = context.assignments.length;
+      return {
+        leaderboard,
+        view: {
+          phase: "active",
+          phaseLabel: `Round ${room.round_number}`,
+          statusMessage: `This round has ${participantCount} options, so only the first ${participantCount} joined players are participating.`,
+          deadline: context.round.base_deadline,
+          isParticipant: false,
+        },
+      };
+    }
+
     return {
       leaderboard,
       view: {
@@ -506,6 +520,7 @@ async function buildPlayerView(room, player) {
         phaseLabel: `Round ${room.round_number}`,
         statusMessage: "Submit your confidence level before the timer ends.",
         deadline: context.round.base_deadline,
+        isParticipant: true,
         caseStudy: questionRes.data.case_study,
         question: questionRes.data.question,
         assignedOption: assignment.option_text,
@@ -647,18 +662,29 @@ async function actionStartRound(room, player) {
 
   const candidates = questionsRes.data.filter((question) => {
     const optionCount = (question.incorrect_answers?.length || 0) + 1;
-    return optionCount === players.length && !usedIds.has(question.id);
+    return optionCount <= players.length && optionCount >= 2 && !usedIds.has(question.id);
   });
 
   if (candidates.length === 0) {
     throw new Error(
-      `No available question has exactly ${players.length} options. Update questions.csv or reset rounds for this room.`,
+      `No available question has options less than or equal to ${players.length}. Update questions.csv or reset rounds for this room.`,
     );
   }
 
-  const picked = candidates[Math.floor(Math.random() * candidates.length)];
+  const exactCandidates = candidates.filter((question) => ((question.incorrect_answers?.length || 0) + 1) === players.length);
+  const pool = exactCandidates.length
+    ? exactCandidates
+    : candidates.filter((question) => {
+        const optionCount = (question.incorrect_answers?.length || 0) + 1;
+        const maxOptionCount = Math.max(...candidates.map((q) => (q.incorrect_answers?.length || 0) + 1));
+        return optionCount === maxOptionCount;
+      });
+
+  const picked = pool[Math.floor(Math.random() * pool.length)];
   const options = shuffle([picked.correct_answer, ...(picked.incorrect_answers || [])]);
-  const shuffledPlayers = shuffle(players);
+  const participantCount = options.length;
+  const participatingPlayers = players.slice(0, participantCount);
+  const shuffledPlayers = shuffle(participatingPlayers);
 
   const now = Date.now();
   const baseDurationSeconds = 60;
