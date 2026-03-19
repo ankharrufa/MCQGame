@@ -89,20 +89,58 @@ async function syncQuestionsFromCsv() {
     trim: true,
   });
 
-  const payload = records.map((record) => {
-    const incorrect = (record.incorrectAnswers || "")
+  const payload = [];
+  const seenIds = new Set();
+
+  for (let index = 0; index < records.length; index += 1) {
+    const record = records[index];
+    const rowNumber = index + 2;
+
+    const rowValues = Object.values(record || {}).map((value) => String(value || "").trim());
+    const isFullyEmpty = rowValues.every((value) => !value);
+    if (isFullyEmpty) {
+      continue;
+    }
+
+    const id = String(record.questionId || "").trim();
+    const question = String(record.question || "").trim();
+    const correctAnswer = String(record.correctAnswer || "").trim();
+
+    if (!id) {
+      throw new Error(`questions.csv row ${rowNumber}: questionId is required.`);
+    }
+    if (seenIds.has(id)) {
+      throw new Error(`questions.csv row ${rowNumber}: duplicate questionId '${id}'.`);
+    }
+    if (!question) {
+      throw new Error(`questions.csv row ${rowNumber}: question is required.`);
+    }
+    if (!correctAnswer) {
+      throw new Error(`questions.csv row ${rowNumber}: correctAnswer is required.`);
+    }
+
+    seenIds.add(id);
+
+    const pipeSeparatedIncorrect = String(record.incorrectAnswers || "")
       .split("|")
       .map((value) => value.trim())
       .filter(Boolean);
 
-    return {
-      id: record.questionId,
-      case_study: record.caseStudy || null,
-      question: record.question,
-      correct_answer: record.correctAnswer,
+    const extraIncorrect = Object.entries(record)
+      .filter(([key]) => /^incorrectanswer\d+$/i.test(key))
+      .map(([, value]) => String(value || "").trim())
+      .filter(Boolean);
+
+    const incorrect = [...new Set([...pipeSeparatedIncorrect, ...extraIncorrect])];
+
+    payload.push({
+      id,
+      case_study: String(record.caseStudy || "").trim() || null,
+      question,
+      correct_answer: correctAnswer,
       incorrect_answers: incorrect,
-    };
-  });
+    });
+  }
 
   if (payload.length === 0) {
     throw new Error("No rows found in questions.csv");
