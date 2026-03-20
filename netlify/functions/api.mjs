@@ -50,6 +50,12 @@ function calcConflictScore(actionChoice, isCorrect) {
   return actionChoice === "stand_ground" ? -5 : -1;
 }
 
+function normalizeRoundDuration(value, fallback = 60) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(15, Math.min(300, Math.round(parsed)));
+}
+
 async function ensureRoom(roomCode) {
   const code = roomCode.trim().toLowerCase();
   let { data: room, error } = await supabase.from("game_rooms").select("*").eq("room_code", code).maybeSingle();
@@ -65,10 +71,11 @@ async function ensureRoom(roomCode) {
     room = insertRes.data;
   }
 
-  if (room.base_duration_seconds !== 60) {
+  const normalizedDuration = normalizeRoundDuration(room.base_duration_seconds, 60);
+  if (room.base_duration_seconds !== normalizedDuration) {
     const updateRes = await supabase
       .from("game_rooms")
-      .update({ base_duration_seconds: 60 })
+      .update({ base_duration_seconds: normalizedDuration })
       .eq("id", room.id)
       .select("*")
       .single();
@@ -519,6 +526,7 @@ async function buildPlayerView(room, player) {
           ? `Players joined: ${playerCount}. A matching question is available.`
           : `Players joined: ${playerCount}. If start fails, add a CSV question with exactly ${playerCount} options (1 correct + ${Math.max(0, playerCount - 1)} incorrect).`,
         canStartRound: playerCount >= 2,
+        baseDurationSeconds: room.base_duration_seconds,
         roundSummary,
       },
     };
@@ -554,6 +562,7 @@ async function buildPlayerView(room, player) {
           statusMessage: `This round has ${participantCount} options, so only the first ${participantCount} joined players are participating.`,
           deadline: context.round.base_deadline,
           roundId: context.round.id,
+          baseDurationSeconds: room.base_duration_seconds,
           inactivePlayerIds,
           isParticipant: false,
         },
@@ -568,6 +577,7 @@ async function buildPlayerView(room, player) {
         statusMessage: "Submit your confidence level before the timer ends.",
         deadline: context.round.base_deadline,
         roundId: context.round.id,
+        baseDurationSeconds: room.base_duration_seconds,
         inactivePlayerIds,
         isParticipant: true,
         caseStudy: questionRes.data.case_study,
@@ -606,6 +616,7 @@ async function buildPlayerView(room, player) {
         phaseLabel: `Round ${room.round_number} Challenge Phase`,
         statusMessage: "Challenge in progress.",
         deadline: context.round.conflict_deadline,
+        baseDurationSeconds: room.base_duration_seconds,
         isConflictPlayer,
         challengePlayers,
         lockedRoundScore,
@@ -622,6 +633,7 @@ async function buildPlayerView(room, player) {
       statusMessage: "Start next round.",
       lobbyInfo: "Round finished.",
       canStartRound: true,
+      baseDurationSeconds: room.base_duration_seconds,
     },
   };
 }
@@ -629,6 +641,7 @@ async function buildPlayerView(room, player) {
 async function actionJoin(room, payload) {
   const name = (payload?.name || "").trim();
   const isAdminRequested = Boolean(payload?.isAdmin);
+  const requestedRoundDuration = normalizeRoundDuration(payload?.roundDurationSeconds, room.base_duration_seconds || 60);
   if (!name) throw new Error("Name is required.");
 
   await syncQuestionsFromCsv();
@@ -678,6 +691,14 @@ async function actionJoin(room, payload) {
     isAdmin = true;
   } else if (!hasAdmin && isFirstPlayer) {
     isAdmin = true;
+  }
+
+  if (isAdmin) {
+    const roomDurationUpdate = await supabase
+      .from("game_rooms")
+      .update({ base_duration_seconds: requestedRoundDuration })
+      .eq("id", room.id);
+    if (roomDurationUpdate.error) throw roomDurationUpdate.error;
   }
 
   const token = randomUUID();
@@ -751,7 +772,7 @@ async function actionStartRound(room, player) {
   const shuffledPlayers = shuffle(participatingPlayers);
 
   const now = Date.now();
-  const baseDurationSeconds = 60;
+  const baseDurationSeconds = normalizeRoundDuration(freshRoom.base_duration_seconds, 60);
   const baseDeadline = new Date(now + baseDurationSeconds * 1000).toISOString();
   const earlyBonusCutoff = new Date(now + Math.floor(baseDurationSeconds * 0.4) * 1000).toISOString();
 
@@ -846,7 +867,8 @@ async function actionSubmitConflict(room, player, payload) {
   await advanceGameIfNeeded(room);
 }
 
-async function actionResetRounds(room) {
+async function actionResetRounds(room, payload = {}) {
+  const updatedDuration = normalizeRoundDuration(payload?.roundDurationSeconds, room.base_duration_seconds || 60);
   const roundsRes = await supabase.from("rounds").select("id").eq("room_id", room.id);
   if (roundsRes.error) throw roundsRes.error;
 
@@ -874,7 +896,7 @@ async function actionResetRounds(room) {
 
   const roomReset = await supabase
     .from("game_rooms")
-    .update({ status: "lobby", current_round_id: null, round_number: 0 })
+    .update({ status: "lobby", current_round_id: null, round_number: 0, base_duration_seconds: updatedDuration })
     .eq("id", room.id);
   if (roomReset.error) throw roomReset.error;
 }
@@ -927,7 +949,7 @@ export const handler = async (event) => {
       await actionStartRound(room, player);
     } else if (action === "resetRounds" || action === "restartGame") {
       requireAdmin(player);
-      await actionResetRounds(room);
+      await actionResetRounds(room, payload);
     } else if (action === "resetPlayers") {
       requireAdmin(player);
       await actionResetPlayers(room, player);

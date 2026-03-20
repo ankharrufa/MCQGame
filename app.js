@@ -19,6 +19,7 @@ let lastShuffleSoundAt = 0;
 let lastWarningBeepSecond = null;
 let activeDeadlineMs = null;
 let timerTickId = null;
+let currentBaseDurationSeconds = 60;
 
 const roomCodeLabel = document.getElementById("roomCodeLabel");
 const playerNameLabel = document.getElementById("playerNameLabel");
@@ -28,6 +29,8 @@ const leaderboardCard = document.getElementById("leaderboardCard");
 const joinForm = document.getElementById("joinForm");
 const nameInput = document.getElementById("nameInput");
 const adminCheckbox = document.getElementById("adminCheckbox");
+const roundTimeLabel = document.getElementById("roundTimeLabel");
+const roundTimeInput = document.getElementById("roundTimeInput");
 const messageEl = document.getElementById("message");
 const rejoinBtn = document.getElementById("rejoinBtn");
 const scoringRulesBtn = document.getElementById("scoringRulesBtn");
@@ -67,10 +70,17 @@ roomCodeLabel.textContent = roomCode;
 if (lastKnownName) {
   nameInput.value = lastKnownName;
 }
+roundTimeLabel.classList.toggle("hidden", !adminCheckbox.checked);
 
 function showMessage(text, kind = "") {
   messageEl.textContent = text;
   messageEl.className = `message ${kind}`.trim();
+}
+
+function normalizeRoundDuration(value, fallback = 60) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(15, Math.min(300, Math.round(parsed)));
 }
 
 function ensureAudioContext() {
@@ -252,12 +262,12 @@ function updateTimerDisplay() {
   timerEl.textContent = `${seconds}s`;
   timerEl.classList.toggle("urgent", seconds <= 10);
 
-  if (seconds <= 3 && seconds > 0) {
+  if (seconds <= 5 && seconds > 0) {
     if (lastWarningBeepSecond !== seconds) {
       playWarningBeep(seconds);
       lastWarningBeepSecond = seconds;
     }
-  } else if (seconds > 3) {
+  } else if (seconds > 5) {
     lastWarningBeepSecond = null;
   }
 }
@@ -376,6 +386,7 @@ function buildRoundScoreExplanation(scoreBreakdown) {
 
 function renderState(data) {
   const { view, leaderboard } = data;
+  currentBaseDurationSeconds = normalizeRoundDuration(view.baseDurationSeconds, currentBaseDurationSeconds);
 
   if (view.roundId && view.roundId !== currentRoundId) {
     currentRoundId = view.roundId;
@@ -514,7 +525,10 @@ async function refreshState() {
 
 async function join(name) {
   const wantsAdmin = Boolean(adminCheckbox?.checked);
-  const data = await api("join", { name, isAdmin: wantsAdmin });
+  const roundDurationSeconds = wantsAdmin
+    ? normalizeRoundDuration(roundTimeInput?.value, currentBaseDurationSeconds)
+    : undefined;
+  const data = await api("join", { name, isAdmin: wantsAdmin, roundDurationSeconds });
   playerToken = data.playerToken;
   lastKnownName = name;
   localStorage.setItem(tokenKey, playerToken);
@@ -541,6 +555,14 @@ joinForm.addEventListener("submit", async (event) => {
   }
 });
 
+adminCheckbox.addEventListener("change", () => {
+  const isAdminSelected = Boolean(adminCheckbox.checked);
+  roundTimeLabel.classList.toggle("hidden", !isAdminSelected);
+  if (isAdminSelected) {
+    roundTimeInput.value = String(currentBaseDurationSeconds || 60);
+  }
+});
+
 startRoundBtn.addEventListener("click", async () => {
   if (startRoundInFlight) return;
   resumeAudioContext();
@@ -559,12 +581,16 @@ startRoundBtn.addEventListener("click", async () => {
 
 resetRoundsBtn.addEventListener("click", async () => {
   resumeAudioContext();
-  const confirmed = window.confirm("Reset rounds? This clears rounds and scores, but keeps all joined players.");
-  if (!confirmed) return;
+  const entered = window.prompt(
+    "Reset rounds and set round time (seconds: 15-300):",
+    String(currentBaseDurationSeconds || 60),
+  );
+  if (entered === null) return;
+  const roundDurationSeconds = normalizeRoundDuration(entered, currentBaseDurationSeconds || 60);
 
   try {
-    await api("resetRounds");
-    showMessage("Rounds reset.", "ok");
+    await api("resetRounds", { roundDurationSeconds });
+    showMessage(`Rounds reset. New round time: ${roundDurationSeconds}s.`, "ok");
     pendingBaseChoice = null;
     pendingConflictChoice = null;
     await refreshState();

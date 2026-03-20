@@ -48,6 +48,7 @@ body {
 }
 
 input[type="text"],
+input[type="number"],
 input:not([type]) {
   width: 100%;
   padding: 10px 12px;
@@ -135,6 +136,10 @@ button.loading {
   border: 0;
   padding: 0;
   background: transparent;
+}
+
+#roundTimeInput {
+  width: 110px;
 }
 
 .case-study {
