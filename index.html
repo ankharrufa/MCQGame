@@ -44,10 +44,6 @@
 
         <div id="lobbySection" class="section hidden">
           <p id="lobbyInfo"></p>
-          <label id="examSelectLabel" class="inline-check hidden">
-            Exam
-            <select id="examSelect"></select>
-          </label>
           <div class="row-actions">
             <button id="startRoundBtn">Start Next Round</button>
             <div id="adminControls" class="row-actions hidden">
@@ -162,6 +158,29 @@
           </table>
 
           <p class="muted">Early bonus: if you choose Confident Correct early and are correct, you get an additional +1.</p>
+        </div>
+      </div>
+
+      <div id="resetSettingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="resetSettingsTitle">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h2 id="resetSettingsTitle">Reset Round Settings</h2>
+          </div>
+
+          <label class="inline-check">
+            Round time (seconds)
+            <input id="resetRoundTimeInput" type="number" min="15" max="300" step="5" value="60" />
+          </label>
+
+          <label class="inline-check">
+            Exam
+            <select id="resetExamSelect"></select>
+          </label>
+
+          <div class="row-actions">
+            <button id="confirmResetSettingsBtn" type="button">Apply & Reset</button>
+            <button id="cancelResetSettingsBtn" class="secondary" type="button">Cancel</button>
+          </div>
         </div>
       </div>
     </main>

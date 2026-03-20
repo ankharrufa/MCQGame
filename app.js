@@ -20,7 +20,8 @@ let lastWarningBeepSecond = null;
 let activeDeadlineMs = null;
 let timerTickId = null;
 let currentBaseDurationSeconds = 60;
-let selectedExam = "";
+let latestAvailableExams = [];
+let currentSelectedExam = "";
 
 const roomCodeLabel = document.getElementById("roomCodeLabel");
 const playerNameLabel = document.getElementById("playerNameLabel");
@@ -44,12 +45,15 @@ const timerEl = document.getElementById("timer");
 
 const lobbySection = document.getElementById("lobbySection");
 const lobbyInfo = document.getElementById("lobbyInfo");
-const examSelectLabel = document.getElementById("examSelectLabel");
-const examSelect = document.getElementById("examSelect");
 const startRoundBtn = document.getElementById("startRoundBtn");
 const adminControls = document.getElementById("adminControls");
 const resetRoundsBtn = document.getElementById("resetRoundsBtn");
 const resetPlayersBtn = document.getElementById("resetPlayersBtn");
+const resetSettingsModal = document.getElementById("resetSettingsModal");
+const resetRoundTimeInput = document.getElementById("resetRoundTimeInput");
+const resetExamSelect = document.getElementById("resetExamSelect");
+const confirmResetSettingsBtn = document.getElementById("confirmResetSettingsBtn");
+const cancelResetSettingsBtn = document.getElementById("cancelResetSettingsBtn");
 
 const questionSection = document.getElementById("questionSection");
 const caseStudy = document.getElementById("caseStudy");
@@ -241,25 +245,36 @@ function setVisibilityForJoined(joined) {
   leaderboardCard.classList.toggle("hidden", !joined);
 }
 
-function updateExamSelect(availableExams, serverSelectedExam, isAdmin) {
-  const exams = Array.isArray(availableExams) ? availableExams.filter(Boolean) : [];
-  const shouldShow = Boolean(isAdmin) && exams.length > 0;
-  examSelectLabel.classList.toggle("hidden", !shouldShow);
-  if (!shouldShow) return;
+function syncExamState(availableExams, serverSelectedExam) {
+  latestAvailableExams = Array.isArray(availableExams) ? availableExams.filter(Boolean) : [];
+  if (!latestAvailableExams.length) {
+    currentSelectedExam = "";
+    return;
+  }
 
-  const previous = selectedExam || examSelect.value || "";
-  examSelect.innerHTML = "";
-  exams.forEach((exam) => {
+  const preferred = serverSelectedExam || currentSelectedExam || latestAvailableExams[0];
+  currentSelectedExam = latestAvailableExams.includes(preferred) ? preferred : latestAvailableExams[0];
+}
+
+function openResetSettingsModal() {
+  resetRoundTimeInput.value = String(currentBaseDurationSeconds || 60);
+  resetExamSelect.innerHTML = "";
+  latestAvailableExams.forEach((exam) => {
     const option = document.createElement("option");
     option.value = exam;
     option.textContent = exam;
-    examSelect.appendChild(option);
+    resetExamSelect.appendChild(option);
   });
+  if (latestAvailableExams.length) {
+    resetExamSelect.value = latestAvailableExams.includes(currentSelectedExam)
+      ? currentSelectedExam
+      : latestAvailableExams[0];
+  }
+  resetSettingsModal.classList.remove("hidden");
+}
 
-  const preferred = serverSelectedExam || previous || exams[0];
-  const finalValue = exams.includes(preferred) ? preferred : exams[0];
-  examSelect.value = finalValue;
-  selectedExam = finalValue;
+function closeResetSettingsModal() {
+  resetSettingsModal.classList.add("hidden");
 }
 
 function renderLeaderboard(players, view) {
@@ -411,7 +426,7 @@ function buildRoundScoreExplanation(scoreBreakdown) {
 function renderState(data) {
   const { view, leaderboard } = data;
   currentBaseDurationSeconds = normalizeRoundDuration(view.baseDurationSeconds, currentBaseDurationSeconds);
-  updateExamSelect(view.availableExams, view.selectedExam, data.isAdmin);
+  syncExamState(view.availableExams, view.selectedExam);
 
   if (view.roundId && view.roundId !== currentRoundId) {
     currentRoundId = view.roundId;
@@ -588,18 +603,44 @@ adminCheckbox.addEventListener("change", () => {
   }
 });
 
+confirmResetSettingsBtn.addEventListener("click", async () => {
+  const roundDurationSeconds = normalizeRoundDuration(resetRoundTimeInput.value, currentBaseDurationSeconds || 60);
+  const exam = resetExamSelect.value || currentSelectedExam;
+  if (!exam) {
+    showMessage("No exam available to reset with.", "error");
+    return;
+  }
+
+  try {
+    await api("resetRounds", { roundDurationSeconds, selectedExam: exam });
+    currentSelectedExam = exam;
+    closeResetSettingsModal();
+    showMessage(`Rounds reset. Exam: ${exam}. New round time: ${roundDurationSeconds}s.`, "ok");
+    pendingBaseChoice = null;
+    pendingConflictChoice = null;
+    await refreshState();
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+});
+
+cancelResetSettingsBtn.addEventListener("click", () => {
+  closeResetSettingsModal();
+});
+
+resetSettingsModal.addEventListener("click", (event) => {
+  if (event.target === resetSettingsModal) {
+    closeResetSettingsModal();
+  }
+});
+
 startRoundBtn.addEventListener("click", async () => {
   if (startRoundInFlight) return;
   resumeAudioContext();
-  const exam = examSelect.value || selectedExam;
-  if (!exam) {
-    showMessage("Select an exam before starting the round.", "error");
-    return;
-  }
   try {
     clearAllSelections();
     setStartRoundLoading(true);
-    await api("startRound", { selectedExam: exam });
+    await api("startRound");
     showMessage("Round started.", "ok");
     await refreshState();
   } catch (error) {
@@ -611,27 +652,11 @@ startRoundBtn.addEventListener("click", async () => {
 
 resetRoundsBtn.addEventListener("click", async () => {
   resumeAudioContext();
-  const exam = examSelect.value || selectedExam;
-  if (!exam) {
-    showMessage("Select an exam before resetting rounds.", "error");
+  if (!latestAvailableExams.length) {
+    showMessage("No exams available. Check questions.csv exam column.", "error");
     return;
   }
-  const entered = window.prompt(
-    "Reset rounds and set round time (seconds: 15-300):",
-    String(currentBaseDurationSeconds || 60),
-  );
-  if (entered === null) return;
-  const roundDurationSeconds = normalizeRoundDuration(entered, currentBaseDurationSeconds || 60);
-
-  try {
-    await api("resetRounds", { roundDurationSeconds, selectedExam: exam });
-    showMessage(`Rounds reset. Exam: ${exam}. New round time: ${roundDurationSeconds}s.`, "ok");
-    pendingBaseChoice = null;
-    pendingConflictChoice = null;
-    await refreshState();
-  } catch (error) {
-    showMessage(error.message, "error");
-  }
+  openResetSettingsModal();
 });
 
 resetPlayersBtn.addEventListener("click", async () => {

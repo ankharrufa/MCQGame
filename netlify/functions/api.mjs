@@ -738,7 +738,7 @@ async function actionJoin(room, payload) {
   return { playerToken: token };
 }
 
-async function actionStartRound(room, player, payload = {}) {
+async function actionStartRound(room, player) {
   await syncQuestionsFromCsv();
   await advanceGameIfNeeded(room);
 
@@ -746,13 +746,15 @@ async function actionStartRound(room, player, payload = {}) {
   if (!availableExams.length) {
     throw new Error("No exams found in questions.csv.");
   }
-  const selectedExam = normalizeExam(payload?.selectedExam, room.selected_exam || availableExams[0]);
+  const selectedExam = normalizeExam(room.selected_exam, availableExams[0]);
   if (!availableExams.includes(selectedExam)) {
-    throw new Error("Selected exam is not available.");
+    const fallbackExam = availableExams[0];
+    const examUpdateRes = await supabase.from("game_rooms").update({ selected_exam: fallbackExam }).eq("id", room.id);
+    if (examUpdateRes.error) throw examUpdateRes.error;
+    room.selected_exam = fallbackExam;
   }
 
-  const examUpdateRes = await supabase.from("game_rooms").update({ selected_exam: selectedExam }).eq("id", room.id);
-  if (examUpdateRes.error) throw examUpdateRes.error;
+  const effectiveExam = normalizeExam(room.selected_exam, availableExams[0]);
 
   const freshRoomRes = await supabase.from("game_rooms").select("*").eq("id", room.id).single();
   if (freshRoomRes.error) throw freshRoomRes.error;
@@ -780,7 +782,7 @@ async function actionStartRound(room, player, payload = {}) {
   const candidates = questionsRes.data.filter((question) => {
     const optionCount = (question.incorrect_answers?.length || 0) + 1;
     return (
-      normalizeExam(question.exam) === selectedExam &&
+      normalizeExam(question.exam) === effectiveExam &&
       optionCount <= players.length &&
       optionCount >= 2 &&
       !usedIds.has(question.id)
@@ -789,7 +791,7 @@ async function actionStartRound(room, player, payload = {}) {
 
   if (candidates.length === 0) {
     throw new Error(
-      `No available ${selectedExam} question has options less than or equal to ${players.length}. Update questions.csv or reset rounds for this room.`,
+      `No available ${effectiveExam} question has options less than or equal to ${players.length}. Update questions.csv or reset rounds for this room.`,
     );
   }
 
@@ -997,7 +999,7 @@ export const handler = async (event) => {
     await advanceGameIfNeeded(room);
 
     if (action === "startRound") {
-      await actionStartRound(room, player, payload);
+      await actionStartRound(room, player);
     } else if (action === "resetRounds" || action === "restartGame") {
       requireAdmin(player);
       await actionResetRounds(room, payload);
