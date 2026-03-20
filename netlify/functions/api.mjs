@@ -572,6 +572,7 @@ async function buildPlayerView(room, player) {
         isParticipant: true,
         caseStudy: questionRes.data.case_study,
         question: questionRes.data.question,
+        optionPool: context.assignments.map((item) => item.option_text),
         assignedOption: assignment.option_text,
         baseChoice: baseSubmission?.confidence ?? null,
       },

@@ -10,6 +10,10 @@ let stateRequestSeq = 0;
 let latestAppliedStateSeq = 0;
 let currentRoundId = null;
 let startRoundInFlight = false;
+let optionDrawIntervalId = null;
+let optionDrawTimeoutId = null;
+let optionDrawRoundId = null;
+const completedOptionDrawRounds = new Set();
 
 const roomCodeLabel = document.getElementById("roomCodeLabel");
 const playerNameLabel = document.getElementById("playerNameLabel");
@@ -100,6 +104,43 @@ function clearAllSelections() {
   document.querySelectorAll("input[name='conflictChoice']").forEach((input) => {
     input.checked = false;
   });
+}
+
+function stopOptionDraw() {
+  if (optionDrawIntervalId) {
+    clearInterval(optionDrawIntervalId);
+    optionDrawIntervalId = null;
+  }
+  if (optionDrawTimeoutId) {
+    clearTimeout(optionDrawTimeoutId);
+    optionDrawTimeoutId = null;
+  }
+  optionDrawRoundId = null;
+}
+
+function startOptionDraw(roundId, optionPool, finalOption) {
+  stopOptionDraw();
+
+  const pool = Array.isArray(optionPool) ? optionPool.filter(Boolean) : [];
+  if (!roundId || !pool.length) {
+    assignedOption.textContent = finalOption;
+    return;
+  }
+
+  optionDrawRoundId = roundId;
+  let index = 0;
+  assignedOption.textContent = pool[index % pool.length];
+
+  optionDrawIntervalId = setInterval(() => {
+    index += 1;
+    assignedOption.textContent = pool[index % pool.length];
+  }, 500);
+
+  optionDrawTimeoutId = setTimeout(() => {
+    stopOptionDraw();
+    completedOptionDrawRounds.add(roundId);
+    assignedOption.textContent = finalOption;
+  }, 3000);
 }
 
 function setStartRoundLoading(loading) {
@@ -246,6 +287,7 @@ function renderState(data) {
   if (!view.roundId) {
     currentRoundId = null;
     clearAllSelections();
+    stopOptionDraw();
   }
 
   if (data.playerName) {
@@ -284,6 +326,7 @@ function renderState(data) {
         input.checked = false;
       });
       pendingBaseChoice = null;
+      stopOptionDraw();
       return;
     }
 
@@ -296,7 +339,14 @@ function renderState(data) {
       caseStudy.textContent = "";
     }
     questionText.textContent = view.question;
-    assignedOption.textContent = view.assignedOption;
+
+    if (!completedOptionDrawRounds.has(view.roundId)) {
+      if (optionDrawRoundId !== view.roundId) {
+        startOptionDraw(view.roundId, view.optionPool || [], view.assignedOption);
+      }
+    } else {
+      assignedOption.textContent = view.assignedOption;
+    }
 
     if (pendingBaseChoice && view.baseChoice === pendingBaseChoice) {
       pendingBaseChoice = null;
@@ -307,6 +357,7 @@ function renderState(data) {
     });
   } else {
     pendingBaseChoice = null;
+    stopOptionDraw();
   }
 
   if (view.phase === "conflict") {
