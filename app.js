@@ -134,7 +134,7 @@ function startOptionDraw(roundId, optionPool, finalOption) {
   optionDrawIntervalId = setInterval(() => {
     index += 1;
     assignedOption.textContent = pool[index % pool.length];
-  }, 500);
+  }, 100);
 
   optionDrawTimeoutId = setTimeout(() => {
     stopOptionDraw();
