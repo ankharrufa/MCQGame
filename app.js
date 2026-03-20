@@ -17,6 +17,8 @@ const completedOptionDrawRounds = new Set();
 let audioContext = null;
 let lastShuffleSoundAt = 0;
 let lastWarningBeepSecond = null;
+let activeDeadlineMs = null;
+let timerTickId = null;
 
 const roomCodeLabel = document.getElementById("roomCodeLabel");
 const playerNameLabel = document.getElementById("playerNameLabel");
@@ -115,7 +117,7 @@ function playShuffleSound() {
   if (nowMs - lastShuffleSoundAt < 120) return;
   lastShuffleSoundAt = nowMs;
   const randomFrequency = 500 + Math.floor(Math.random() * 450);
-  playTone({ frequency: randomFrequency, durationMs: 45, gain: 0.018, type: "triangle" });
+  playTone({ frequency: randomFrequency, durationMs: 45, gain: 0.024, type: "triangle" });
 }
 
 function playWarningBeep(secondsLeft) {
@@ -237,15 +239,16 @@ function renderLeaderboard(players, view) {
   });
 }
 
-function renderTimer(deadlineIso) {
-  if (!deadlineIso) {
+function updateTimerDisplay() {
+  if (!activeDeadlineMs) {
     timerEl.classList.add("hidden");
     timerEl.classList.remove("urgent");
     lastWarningBeepSecond = null;
     return;
   }
+
   timerEl.classList.remove("hidden");
-  const seconds = Math.max(0, Math.ceil((new Date(deadlineIso).getTime() - Date.now()) / 1000));
+  const seconds = Math.max(0, Math.ceil((activeDeadlineMs - Date.now()) / 1000));
   timerEl.textContent = `${seconds}s`;
   timerEl.classList.toggle("urgent", seconds <= 10);
 
@@ -256,6 +259,35 @@ function renderTimer(deadlineIso) {
     }
   } else if (seconds > 3) {
     lastWarningBeepSecond = null;
+  }
+}
+
+function stopTimerTicker() {
+  if (timerTickId) {
+    clearInterval(timerTickId);
+    timerTickId = null;
+  }
+}
+
+function setTimerDeadline(deadlineIso) {
+  if (!deadlineIso) {
+    activeDeadlineMs = null;
+    lastWarningBeepSecond = null;
+    stopTimerTicker();
+    updateTimerDisplay();
+    return;
+  }
+
+  const nextDeadlineMs = new Date(deadlineIso).getTime();
+  const deadlineChanged = activeDeadlineMs !== nextDeadlineMs;
+  activeDeadlineMs = nextDeadlineMs;
+  if (deadlineChanged) {
+    lastWarningBeepSecond = null;
+  }
+
+  updateTimerDisplay();
+  if (!timerTickId) {
+    timerTickId = setInterval(updateTimerDisplay, 200);
   }
 }
 
@@ -361,7 +393,7 @@ function renderState(data) {
   }
   renderLeaderboard(leaderboard || [], view);
   clearSections();
-  renderTimer(view.deadline || null);
+  setTimerDeadline(view.deadline || null);
 
   phaseTitle.textContent = view.phaseLabel;
   statusLine.textContent = view.statusMessage || "";
@@ -637,5 +669,6 @@ document.querySelectorAll("input[name='conflictChoice']").forEach((input) => {
     localStorage.removeItem(tokenKey);
     playerToken = "";
     setVisibilityForJoined(false);
+    setTimerDeadline(null);
   }
 })();
