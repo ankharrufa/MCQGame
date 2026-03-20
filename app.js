@@ -14,6 +14,9 @@ let optionDrawIntervalId = null;
 let optionDrawTimeoutId = null;
 let optionDrawRoundId = null;
 const completedOptionDrawRounds = new Set();
+let audioContext = null;
+let lastShuffleSoundAt = 0;
+let lastWarningBeepSecond = null;
 
 const roomCodeLabel = document.getElementById("roomCodeLabel");
 const playerNameLabel = document.getElementById("playerNameLabel");
@@ -66,6 +69,58 @@ if (lastKnownName) {
 function showMessage(text, kind = "") {
   messageEl.textContent = text;
   messageEl.className = `message ${kind}`.trim();
+}
+
+function ensureAudioContext() {
+  if (audioContext) return audioContext;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  audioContext = new AudioCtx();
+  return audioContext;
+}
+
+async function resumeAudioContext() {
+  const context = ensureAudioContext();
+  if (!context) return;
+  if (context.state === "suspended") {
+    try {
+      await context.resume();
+    } catch {
+      return;
+    }
+  }
+}
+
+function playTone({ frequency, durationMs, gain = 0.03, type = "sine" }) {
+  const context = ensureAudioContext();
+  if (!context || context.state !== "running") return;
+
+  const oscillator = context.createOscillator();
+  const gainNode = context.createGain();
+  oscillator.type = type;
+  oscillator.frequency.value = frequency;
+  gainNode.gain.value = gain;
+
+  oscillator.connect(gainNode);
+  gainNode.connect(context.destination);
+
+  const now = context.currentTime;
+  oscillator.start(now);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, now + durationMs / 1000);
+  oscillator.stop(now + durationMs / 1000);
+}
+
+function playShuffleSound() {
+  const nowMs = Date.now();
+  if (nowMs - lastShuffleSoundAt < 120) return;
+  lastShuffleSoundAt = nowMs;
+  const randomFrequency = 500 + Math.floor(Math.random() * 450);
+  playTone({ frequency: randomFrequency, durationMs: 45, gain: 0.018, type: "triangle" });
+}
+
+function playWarningBeep(secondsLeft) {
+  const baseFreq = secondsLeft === 1 ? 1200 : 980;
+  playTone({ frequency: baseFreq, durationMs: 110, gain: 0.05, type: "square" });
 }
 
 function openScoringModal() {
@@ -134,13 +189,14 @@ function startOptionDraw(roundId, optionPool, finalOption) {
   optionDrawIntervalId = setInterval(() => {
     index += 1;
     assignedOption.textContent = pool[index % pool.length];
+    playShuffleSound();
   }, 100);
 
   optionDrawTimeoutId = setTimeout(() => {
     stopOptionDraw();
     completedOptionDrawRounds.add(roundId);
     assignedOption.textContent = finalOption;
-  }, 3000);
+  }, 2000);
 }
 
 function setStartRoundLoading(loading) {
@@ -185,12 +241,22 @@ function renderTimer(deadlineIso) {
   if (!deadlineIso) {
     timerEl.classList.add("hidden");
     timerEl.classList.remove("urgent");
+    lastWarningBeepSecond = null;
     return;
   }
   timerEl.classList.remove("hidden");
   const seconds = Math.max(0, Math.ceil((new Date(deadlineIso).getTime() - Date.now()) / 1000));
   timerEl.textContent = `${seconds}s`;
   timerEl.classList.toggle("urgent", seconds <= 10);
+
+  if (seconds <= 3 && seconds > 0) {
+    if (lastWarningBeepSecond !== seconds) {
+      playWarningBeep(seconds);
+      lastWarningBeepSecond = seconds;
+    }
+  } else if (seconds > 3) {
+    lastWarningBeepSecond = null;
+  }
 }
 
 function clearSections() {
@@ -432,6 +498,7 @@ async function join(name) {
 
 joinForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  resumeAudioContext();
   const name = nameInput.value.trim();
   if (!name) return;
   showRejoinOption(false);
@@ -444,6 +511,7 @@ joinForm.addEventListener("submit", async (event) => {
 
 startRoundBtn.addEventListener("click", async () => {
   if (startRoundInFlight) return;
+  resumeAudioContext();
   try {
     clearAllSelections();
     setStartRoundLoading(true);
@@ -458,6 +526,7 @@ startRoundBtn.addEventListener("click", async () => {
 });
 
 resetRoundsBtn.addEventListener("click", async () => {
+  resumeAudioContext();
   const confirmed = window.confirm("Reset rounds? This clears rounds and scores, but keeps all joined players.");
   if (!confirmed) return;
 
@@ -473,6 +542,7 @@ resetRoundsBtn.addEventListener("click", async () => {
 });
 
 resetPlayersBtn.addEventListener("click", async () => {
+  resumeAudioContext();
   const confirmed = window.confirm("Reset players? This removes all other players and keeps only you as Game admin.");
   if (!confirmed) return;
 
@@ -488,6 +558,7 @@ resetPlayersBtn.addEventListener("click", async () => {
 });
 
 rejoinBtn.addEventListener("click", async () => {
+  resumeAudioContext();
   const name = nameInput.value.trim();
   if (!name) {
     showMessage("Enter your name, then click Rejoin.", "error");
