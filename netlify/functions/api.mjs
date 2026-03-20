@@ -56,6 +56,19 @@ function normalizeRoundDuration(value, fallback = 60) {
   return Math.max(15, Math.min(300, Math.round(parsed)));
 }
 
+function normalizeExam(value, fallback = "General") {
+  const exam = String(value || "").trim();
+  return exam || fallback;
+}
+
+async function getAvailableExams() {
+  const questionsRes = await supabase.from("questions").select("exam");
+  if (questionsRes.error) throw questionsRes.error;
+
+  const exams = [...new Set((questionsRes.data || []).map((item) => normalizeExam(item.exam)).filter(Boolean))].sort();
+  return exams;
+}
+
 async function ensureRoom(roomCode) {
   const code = roomCode.trim().toLowerCase();
   let { data: room, error } = await supabase.from("game_rooms").select("*").eq("room_code", code).maybeSingle();
@@ -156,6 +169,7 @@ async function syncQuestionsFromCsv() {
     }
 
     const id = String(record.questionId || "").trim();
+    const exam = String(record.exam || "").trim() || "General";
     const question = String(record.question || "").trim();
     const correctAnswer = String(record.correctAnswer || "").trim();
 
@@ -188,6 +202,7 @@ async function syncQuestionsFromCsv() {
 
     payload.push({
       id,
+      exam,
       case_study: String(record.caseStudy || "").trim() || null,
       question,
       correct_answer: correctAnswer,
@@ -448,8 +463,11 @@ async function buildPlayerView(room, player) {
   const leaderboard = await getLeaderboard(room.id);
 
   if (!room.current_round_id) {
+    await syncQuestionsFromCsv();
     const questionsRes = await supabase.from("questions").select("id,incorrect_answers");
     if (questionsRes.error) throw questionsRes.error;
+    const availableExams = await getAvailableExams();
+    const selectedExam = normalizeExam(room.selected_exam, availableExams[0] || "General");
 
     const playersRes = await supabase.from("players").select("id").eq("room_id", room.id);
     if (playersRes.error) throw playersRes.error;
@@ -527,6 +545,8 @@ async function buildPlayerView(room, player) {
           : `Players joined: ${playerCount}. If start fails, add a CSV question with exactly ${playerCount} options (1 correct + ${Math.max(0, playerCount - 1)} incorrect).`,
         canStartRound: playerCount >= 2,
         baseDurationSeconds: room.base_duration_seconds,
+        availableExams,
+        selectedExam,
         roundSummary,
       },
     };
@@ -718,9 +738,21 @@ async function actionJoin(room, payload) {
   return { playerToken: token };
 }
 
-async function actionStartRound(room, player) {
+async function actionStartRound(room, player, payload = {}) {
   await syncQuestionsFromCsv();
   await advanceGameIfNeeded(room);
+
+  const availableExams = await getAvailableExams();
+  if (!availableExams.length) {
+    throw new Error("No exams found in questions.csv.");
+  }
+  const selectedExam = normalizeExam(payload?.selectedExam, room.selected_exam || availableExams[0]);
+  if (!availableExams.includes(selectedExam)) {
+    throw new Error("Selected exam is not available.");
+  }
+
+  const examUpdateRes = await supabase.from("game_rooms").update({ selected_exam: selectedExam }).eq("id", room.id);
+  if (examUpdateRes.error) throw examUpdateRes.error;
 
   const freshRoomRes = await supabase.from("game_rooms").select("*").eq("id", room.id).single();
   if (freshRoomRes.error) throw freshRoomRes.error;
@@ -747,12 +779,17 @@ async function actionStartRound(room, player) {
 
   const candidates = questionsRes.data.filter((question) => {
     const optionCount = (question.incorrect_answers?.length || 0) + 1;
-    return optionCount <= players.length && optionCount >= 2 && !usedIds.has(question.id);
+    return (
+      normalizeExam(question.exam) === selectedExam &&
+      optionCount <= players.length &&
+      optionCount >= 2 &&
+      !usedIds.has(question.id)
+    );
   });
 
   if (candidates.length === 0) {
     throw new Error(
-      `No available question has options less than or equal to ${players.length}. Update questions.csv or reset rounds for this room.`,
+      `No available ${selectedExam} question has options less than or equal to ${players.length}. Update questions.csv or reset rounds for this room.`,
     );
   }
 
@@ -869,6 +906,14 @@ async function actionSubmitConflict(room, player, payload) {
 
 async function actionResetRounds(room, payload = {}) {
   const updatedDuration = normalizeRoundDuration(payload?.roundDurationSeconds, room.base_duration_seconds || 60);
+  const availableExams = await getAvailableExams();
+  if (!availableExams.length) {
+    throw new Error("No exams found in questions.csv.");
+  }
+  const selectedExam = normalizeExam(payload?.selectedExam, room.selected_exam || availableExams[0]);
+  if (!availableExams.includes(selectedExam)) {
+    throw new Error("Selected exam is not available.");
+  }
   const roundsRes = await supabase.from("rounds").select("id").eq("room_id", room.id);
   if (roundsRes.error) throw roundsRes.error;
 
@@ -896,7 +941,13 @@ async function actionResetRounds(room, payload = {}) {
 
   const roomReset = await supabase
     .from("game_rooms")
-    .update({ status: "lobby", current_round_id: null, round_number: 0, base_duration_seconds: updatedDuration })
+    .update({
+      status: "lobby",
+      current_round_id: null,
+      round_number: 0,
+      base_duration_seconds: updatedDuration,
+      selected_exam: selectedExam,
+    })
     .eq("id", room.id);
   if (roomReset.error) throw roomReset.error;
 }
@@ -946,7 +997,7 @@ export const handler = async (event) => {
     await advanceGameIfNeeded(room);
 
     if (action === "startRound") {
-      await actionStartRound(room, player);
+      await actionStartRound(room, player, payload);
     } else if (action === "resetRounds" || action === "restartGame") {
       requireAdmin(player);
       await actionResetRounds(room, payload);

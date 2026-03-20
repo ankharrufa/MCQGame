@@ -49,6 +49,7 @@ body {
 
 input[type="text"],
 input[type="number"],
+select,
 input:not([type]) {
   width: 100%;
   padding: 10px 12px;
@@ -140,6 +141,10 @@ button.loading {
 
 #roundTimeInput {
   width: 110px;
+}
+
+#examSelect {
+  width: 220px;
 }
 
 .case-study {

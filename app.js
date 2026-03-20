@@ -20,6 +20,7 @@ let lastWarningBeepSecond = null;
 let activeDeadlineMs = null;
 let timerTickId = null;
 let currentBaseDurationSeconds = 60;
+let selectedExam = "";
 
 const roomCodeLabel = document.getElementById("roomCodeLabel");
 const playerNameLabel = document.getElementById("playerNameLabel");
@@ -43,6 +44,8 @@ const timerEl = document.getElementById("timer");
 
 const lobbySection = document.getElementById("lobbySection");
 const lobbyInfo = document.getElementById("lobbyInfo");
+const examSelectLabel = document.getElementById("examSelectLabel");
+const examSelect = document.getElementById("examSelect");
 const startRoundBtn = document.getElementById("startRoundBtn");
 const adminControls = document.getElementById("adminControls");
 const resetRoundsBtn = document.getElementById("resetRoundsBtn");
@@ -238,6 +241,27 @@ function setVisibilityForJoined(joined) {
   leaderboardCard.classList.toggle("hidden", !joined);
 }
 
+function updateExamSelect(availableExams, serverSelectedExam, isAdmin) {
+  const exams = Array.isArray(availableExams) ? availableExams.filter(Boolean) : [];
+  const shouldShow = Boolean(isAdmin) && exams.length > 0;
+  examSelectLabel.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow) return;
+
+  const previous = selectedExam || examSelect.value || "";
+  examSelect.innerHTML = "";
+  exams.forEach((exam) => {
+    const option = document.createElement("option");
+    option.value = exam;
+    option.textContent = exam;
+    examSelect.appendChild(option);
+  });
+
+  const preferred = serverSelectedExam || previous || exams[0];
+  const finalValue = exams.includes(preferred) ? preferred : exams[0];
+  examSelect.value = finalValue;
+  selectedExam = finalValue;
+}
+
 function renderLeaderboard(players, view) {
   const inactiveIds = new Set(view?.phase === "active" ? (view?.inactivePlayerIds || []) : []);
   leaderboardBody.innerHTML = "";
@@ -387,6 +411,7 @@ function buildRoundScoreExplanation(scoreBreakdown) {
 function renderState(data) {
   const { view, leaderboard } = data;
   currentBaseDurationSeconds = normalizeRoundDuration(view.baseDurationSeconds, currentBaseDurationSeconds);
+  updateExamSelect(view.availableExams, view.selectedExam, data.isAdmin);
 
   if (view.roundId && view.roundId !== currentRoundId) {
     currentRoundId = view.roundId;
@@ -566,10 +591,15 @@ adminCheckbox.addEventListener("change", () => {
 startRoundBtn.addEventListener("click", async () => {
   if (startRoundInFlight) return;
   resumeAudioContext();
+  const exam = examSelect.value || selectedExam;
+  if (!exam) {
+    showMessage("Select an exam before starting the round.", "error");
+    return;
+  }
   try {
     clearAllSelections();
     setStartRoundLoading(true);
-    await api("startRound");
+    await api("startRound", { selectedExam: exam });
     showMessage("Round started.", "ok");
     await refreshState();
   } catch (error) {
@@ -581,6 +611,11 @@ startRoundBtn.addEventListener("click", async () => {
 
 resetRoundsBtn.addEventListener("click", async () => {
   resumeAudioContext();
+  const exam = examSelect.value || selectedExam;
+  if (!exam) {
+    showMessage("Select an exam before resetting rounds.", "error");
+    return;
+  }
   const entered = window.prompt(
     "Reset rounds and set round time (seconds: 15-300):",
     String(currentBaseDurationSeconds || 60),
@@ -589,8 +624,8 @@ resetRoundsBtn.addEventListener("click", async () => {
   const roundDurationSeconds = normalizeRoundDuration(entered, currentBaseDurationSeconds || 60);
 
   try {
-    await api("resetRounds", { roundDurationSeconds });
-    showMessage(`Rounds reset. New round time: ${roundDurationSeconds}s.`, "ok");
+    await api("resetRounds", { roundDurationSeconds, selectedExam: exam });
+    showMessage(`Rounds reset. Exam: ${exam}. New round time: ${roundDurationSeconds}s.`, "ok");
     pendingBaseChoice = null;
     pendingConflictChoice = null;
     await refreshState();

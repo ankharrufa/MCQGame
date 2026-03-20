@@ -4,6 +4,7 @@ create table if not exists public.game_rooms (
   id uuid primary key default gen_random_uuid(),
   room_code text not null unique,
   status text not null default 'lobby',
+  selected_exam text not null default 'General',
   current_round_id uuid,
   last_started_by_player_id uuid,
   round_number integer not null default 0,
@@ -26,6 +27,7 @@ create table if not exists public.players (
 
 create table if not exists public.questions (
   id text primary key,
+  exam text not null default 'General',
   case_study text,
   question text not null,
   correct_answer text not null,
@@ -84,6 +86,8 @@ create table if not exists public.score_events (
 );
 
 alter table public.players add column if not exists is_admin boolean not null default false;
+alter table public.game_rooms add column if not exists selected_exam text not null default 'General';
+alter table public.questions add column if not exists exam text not null default 'General';
 
 create index if not exists idx_players_room on public.players(room_id);
 create unique index if not exists ux_players_one_admin_per_room on public.players(room_id) where is_admin;
