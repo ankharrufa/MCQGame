@@ -654,7 +654,7 @@ async function actionJoin(room, payload) {
   );
 
   if (maxOptions > 0 && (countRes.count || 0) >= maxOptions) {
-    throw new Error("Sorry! The room is full. You cannot joint at the moment");
+    throw new Error("Sorry! The room is full. You cannot join at the moment");
   }
 
   await reconcileRoomAdmin(room.id);
