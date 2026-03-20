@@ -22,6 +22,11 @@ let timerTickId = null;
 let currentBaseDurationSeconds = 60;
 let latestAvailableExams = [];
 let currentSelectedExam = "";
+let revealIntervalId = null;
+let revealTimeoutId = null;
+let revealRoundId = null;
+let revealPendingSummary = null;
+const revealedRoundIds = new Set();
 
 const roomCodeLabel = document.getElementById("roomCodeLabel");
 const playerNameLabel = document.getElementById("playerNameLabel");
@@ -70,6 +75,8 @@ const roundScoreLine = document.getElementById("roundScoreLine");
 const roundCaseStudy = document.getElementById("roundCaseStudy");
 const roundQuestionText = document.getElementById("roundQuestionText");
 const roundOptionsList = document.getElementById("roundOptionsList");
+const revealOverlay = document.getElementById("revealOverlay");
+const revealCountdown = document.getElementById("revealCountdown");
 
 const leaderboardBody = document.getElementById("leaderboardBody");
 
@@ -142,12 +149,70 @@ function playWarningBeep(secondsLeft) {
   playTone({ frequency: baseFreq, durationMs: 110, gain: 0.05, type: "square" });
 }
 
+function playTadahSound() {
+  const context = ensureAudioContext();
+  if (!context || context.state !== "running") return;
+
+  const sequence = [523.25, 659.25, 783.99, 1046.5];
+  sequence.forEach((frequency, index) => {
+    const delay = index * 90;
+    setTimeout(() => {
+      playTone({ frequency, durationMs: 180, gain: 0.06, type: "triangle" });
+    }, delay);
+  });
+}
+
 function openScoringModal() {
   scoringModal.classList.remove("hidden");
 }
 
 function closeScoringModal() {
   scoringModal.classList.add("hidden");
+}
+
+function stopRevealSequence() {
+  if (revealIntervalId) {
+    clearInterval(revealIntervalId);
+    revealIntervalId = null;
+  }
+  if (revealTimeoutId) {
+    clearTimeout(revealTimeoutId);
+    revealTimeoutId = null;
+  }
+}
+
+function hideRevealOverlay() {
+  revealOverlay.classList.add("hidden");
+  stopRevealSequence();
+}
+
+function startRevealSequence(roundSummary) {
+  if (!roundSummary?.roundId) return;
+  revealRoundId = roundSummary.roundId;
+  revealPendingSummary = roundSummary;
+  revealOverlay.classList.remove("hidden");
+
+  let count = 3;
+  revealCountdown.textContent = String(count);
+  stopRevealSequence();
+
+  revealIntervalId = setInterval(() => {
+    count -= 1;
+    if (count <= 0) {
+      revealCountdown.textContent = "1";
+      return;
+    }
+    revealCountdown.textContent = String(count);
+  }, 1000);
+
+  revealTimeoutId = setTimeout(() => {
+    stopRevealSequence();
+    hideRevealOverlay();
+    playTadahSound();
+    revealedRoundIds.add(revealRoundId);
+    renderRoundSummary(revealPendingSummary);
+    revealPendingSummary = null;
+  }, 3000);
 }
 
 function showRejoinOption(visible) {
@@ -439,6 +504,11 @@ function renderState(data) {
     stopOptionDraw();
   }
 
+  if (view.phase !== "between_rounds") {
+    hideRevealOverlay();
+    revealPendingSummary = null;
+  }
+
   if (data.playerName) {
     playerNameLabel.textContent = data.playerName;
   }
@@ -455,7 +525,20 @@ function renderState(data) {
     startRoundBtn.classList.toggle("hidden", !data.isAdmin);
     startRoundBtn.disabled = startRoundInFlight || !view.canStartRound;
     adminControls.classList.toggle("hidden", !data.isAdmin);
-    renderRoundSummary(view.roundSummary || null);
+
+    if (view.phase === "between_rounds" && view.roundSummary?.roundId) {
+      const alreadyRevealed = revealedRoundIds.has(view.roundSummary.roundId);
+      const currentlyRevealing = revealRoundId === view.roundSummary.roundId && !revealOverlay.classList.contains("hidden");
+
+      if (!alreadyRevealed && !currentlyRevealing) {
+        renderRoundSummary(null);
+        startRevealSequence(view.roundSummary);
+      } else if (alreadyRevealed) {
+        renderRoundSummary(view.roundSummary);
+      }
+    } else {
+      renderRoundSummary(view.roundSummary || null);
+    }
   } else {
     startRoundBtn.classList.add("hidden");
     renderRoundSummary(null);
